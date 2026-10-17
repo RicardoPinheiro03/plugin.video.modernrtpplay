@@ -1,6 +1,7 @@
 """Rate limiting: our own request budget and how we react when RTP Play throttles us."""
 
 import email.utils
+import time
 
 import pytest
 import requests
@@ -97,7 +98,7 @@ def test_backoff_uses_full_jitter(clock):
 
 def test_backoff_is_capped(clock):
     session = FakeSession(*[FakeResponse(429)] * 4, OK)
-    policy = RetryPolicy(max_retries=4, backoff_base=4, max_backoff=10)
+    policy = RetryPolicy(max_retries=4, backoff_base=4, max_backoff=10, max_total_wait=60)
     make_client(session, clock, policy).get_text("/play/")
     assert clock.sleeps == [4.0, 8.0, 10.0, 10.0]
 
@@ -117,6 +118,22 @@ def test_retry_after_longer_than_allowed_fails_fast_instead_of_blocking_kodi(clo
         make_client(session, clock, RetryPolicy(max_retry_after=30)).get_text("/play/")
     assert error.value.retry_after == 3600.0
     assert clock.sleeps == []
+
+
+def test_total_wait_is_capped_even_when_each_retry_after_is_allowed(clock):
+    session = FakeSession(*[FakeResponse(429, headers={"Retry-After": "20"})] * 4)
+    with pytest.raises(RateLimitedError) as error:
+        make_client(session, clock).get_text("/play/")
+    assert error.value.retry_after == 20.0
+    assert clock.sleeps == [20.0]  # a second 20 s wait would exceed max_total_wait (30 s)
+
+
+def test_total_wait_cap_also_bounds_connection_retries(clock):
+    session = FakeSession(*[requests.ConnectionError("down")] * 4)
+    policy = RetryPolicy(backoff_base=10, max_total_wait=25)
+    with pytest.raises(NetworkError):
+        make_client(session, clock, policy).get_text("/play/")
+    assert clock.sleeps == [10.0]  # the next backoff (20 s) would exceed 25 s in total
 
 
 def test_rate_limited_error_is_an_rtpplay_error():
@@ -152,6 +169,27 @@ def test_connection_failures_are_retried_with_backoff(clock, exc):
     assert clock.sleeps == [1.0]
 
 
+def test_truncated_chunked_response_is_retried(clock):
+    session = FakeSession(requests.exceptions.ChunkedEncodingError("truncated"), OK)
+    assert make_client(session, clock).get_text("/play/") == "ok"
+    assert clock.sleeps == [1.0]
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        requests.exceptions.TooManyRedirects("loop"),
+        requests.exceptions.ContentDecodingError("gzip"),
+        requests.exceptions.InvalidURL("bad"),
+    ],
+)
+def test_other_request_errors_become_network_errors_without_retry(clock, exc):
+    session = FakeSession(exc)
+    with pytest.raises(NetworkError):
+        make_client(session, clock).get_text("/play/")
+    assert len(session.requests) == 1
+
+
 def test_persistent_connection_failure_raises_network_error(clock):
     session = FakeSession(*[requests.ConnectionError("down")] * 3)
     with pytest.raises(NetworkError):
@@ -177,7 +215,7 @@ def test_unexpected_status_is_not_retried(clock):
 # --- parse_retry_after -------------------------------------------------------
 
 
-@pytest.mark.parametrize("value", [None, "", "soon", "-5"])
+@pytest.mark.parametrize("value", [None, "", "soon", "-5", "\u00b2", "\u0663"])
 def test_parse_retry_after_ignores_missing_or_invalid_values(value):
     assert parse_retry_after(value) is None
 
@@ -185,3 +223,21 @@ def test_parse_retry_after_ignores_missing_or_invalid_values(value):
 def test_parse_retry_after_clamps_past_dates_to_zero():
     past = email.utils.formatdate(0, usegmt=True)
     assert parse_retry_after(past, now=lambda: 1_700_000_000.0) == 0.0
+
+
+@pytest.mark.skipif(not hasattr(time, "tzset"), reason="needs time.tzset (POSIX)")
+def test_parse_retry_after_treats_minus_zero_zone_as_utc(monkeypatch):
+    # A naive datetime would be read in local time, so use a zone far from UTC.
+    monkeypatch.setenv("TZ", "America/New_York")
+    time.tzset()
+    now = 1_700_000_000.0
+    date = email.utils.formatdate(now + 5)  # "... -0000": parsed as a naive datetime
+    assert date.endswith("-0000")
+    assert parse_retry_after(date, now=lambda: now) == pytest.approx(5.0)
+
+
+@pytest.fixture(autouse=True)
+def _restore_timezone():
+    yield
+    if hasattr(time, "tzset"):
+        time.tzset()

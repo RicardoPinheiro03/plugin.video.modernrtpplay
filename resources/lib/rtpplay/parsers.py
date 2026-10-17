@@ -142,8 +142,13 @@ def parse_episode_stream(page: str) -> Stream:
 
 def _deobfuscate(source: str) -> str:
     def decode(match: "re.Match[str]") -> str:
-        parts = json.loads(match.group(1).replace("'", '"'))
-        return json.dumps(base64.b64decode(unquote("".join(parts))).decode("utf-8"))
+        try:
+            parts = json.loads(match.group(1).replace("'", '"'))
+            return json.dumps(base64.b64decode(unquote("".join(parts))).decode("utf-8"))
+        # JSONDecodeError, binascii.Error and UnicodeDecodeError are ValueErrors;
+        # TypeError comes from joining non-string parts.
+        except (TypeError, ValueError) as exc:
+            raise ParseError("Could not decode the obfuscated player URL") from exc
 
     return _OBFUSCATED.sub(decode, source)
 

@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import List, Optional
+import re
+from typing import List, Optional, TypeVar
 
 from . import parsers
 from .http import DEFAULT_HEADERS, HttpClient
 from .models import Category, Channel, Episode, Page, Program, Stream
+
+T = TypeVar("T")
 
 # Category ids are what the site's list endpoints filter on. They are not
 # exposed anywhere cheap to scrape (each needs its own page fetch), and they
@@ -75,6 +78,8 @@ class RtpPlayClient:
         return parsers.parse_live_channels(self._http.get_text("/play/direto"))
 
     def live_stream(self, channel_slug: str) -> Stream:
+        if not re.fullmatch(r"[\w-]+", channel_slug):
+            raise ValueError("channel_slug must be a channel slug such as 'rtp1'")
         stream = parsers.parse_live_stream(self._http.get_text("/play/direto/" + channel_slug))
         return dataclasses.replace(stream, headers=dict(STREAM_HEADERS))
 
@@ -92,5 +97,5 @@ def _page(page: int) -> int:
     return page
 
 
-def _paged(items: list, page: int, page_size: int) -> Page:
+def _paged(items: List[T], page: int, page_size: int) -> Page[T]:
     return Page(items=items, page=page, has_more=len(items) >= page_size)
