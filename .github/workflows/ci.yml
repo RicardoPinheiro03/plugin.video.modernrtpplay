@@ -9,9 +9,10 @@ on:
 permissions:
   contents: read
 
+# Superseded pull request runs are cancelled. Every push to main gets its own group
+# (keyed by commit), so queued main runs are never cancelled either.
 concurrency:
-  group: ci-${{ github.ref }}
-  # Superseded pull request runs are cancelled; every push to main keeps its own run.
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
