@@ -1,0 +1,3 @@
+# Last releases that still support Python 3.8 (Kodi 20 on Windows and Android).
+pytest==8.3.5
+requests==2.32.4
