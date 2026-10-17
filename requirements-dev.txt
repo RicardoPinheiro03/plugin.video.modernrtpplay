@@ -1,4 +1,5 @@
 kodi-addon-checker==0.0.36
 pytest==9.1.1
+pytest-cov==7.0.0
 requests==2.34.2
 ruff==0.17.1
