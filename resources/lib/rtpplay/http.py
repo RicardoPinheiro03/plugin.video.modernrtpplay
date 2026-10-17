@@ -19,7 +19,7 @@ import re
 import time
 from dataclasses import dataclass
 from datetime import timezone
-from typing import Callable, Mapping, Optional
+from typing import Callable, Mapping, Optional, Union
 
 import requests
 
@@ -147,7 +147,7 @@ class HttpClient:
         self._rand = rand
         self._now = now
 
-    def get_text(self, path: str, params: Optional[Mapping[str, object]] = None) -> str:
+    def get_text(self, path: str, params: Optional[Mapping[str, Union[str, int]]] = None) -> str:
         """GET ``path`` (relative to www.rtp.pt) and return the response body."""
         url = path if path.startswith("http") else BASE_URL + path
         attempt = 0
@@ -182,10 +182,7 @@ class HttpClient:
                 raise self._give_up(status, url, retry_after)
             if attempt >= self._retry.max_retries:
                 raise self._give_up(status, url, retry_after)
-            if retry_after is None:
-                delay = self._retry.backoff(attempt, self._rand)
-            else:
-                delay = retry_after
+            delay = self._retry.backoff(attempt, self._rand) if retry_after is None else retry_after
             if not self._fits(waited, delay):
                 raise self._give_up(status, url, retry_after)
             self._wait(delay, url, "HTTP {}".format(status))
