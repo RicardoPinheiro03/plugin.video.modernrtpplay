@@ -1,0 +1,43 @@
+# Kodi Media Center language file
+# Addon Name: RTP Play
+# Addon id: plugin.video.modernrtpplay
+msgid ""
+msgstr ""
+"Project-Id-Version: plugin.video.modernrtpplay\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: pt_PT\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+msgctxt "#30000"
+msgid "Live TV & Radio"
+msgstr "TV e Rádio em Direto"
+
+msgctxt "#30001"
+msgid "Programs"
+msgstr "Programas"
+
+msgctxt "#30002"
+msgid "Search"
+msgstr "Pesquisar"
+
+msgctxt "#30003"
+msgid "Next page"
+msgstr "Página seguinte"
+
+msgctxt "#30004"
+msgid "RTP Play is limiting requests. Try again in %d seconds."
+msgstr "A RTP Play está a limitar pedidos. Tente novamente dentro de %d segundos."
+
+msgctxt "#30005"
+msgid "RTP Play is limiting requests. Try again later."
+msgstr "A RTP Play está a limitar pedidos. Tente novamente mais tarde."
+
+msgctxt "#30006"
+msgid "Could not load content from RTP Play."
+msgstr "Não foi possível carregar conteúdos da RTP Play."
+
+msgctxt "#30007"
+msgid "Search RTP Play"
+msgstr "Pesquisar na RTP Play"
