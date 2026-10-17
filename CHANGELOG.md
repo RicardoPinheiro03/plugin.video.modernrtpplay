@@ -4,7 +4,7 @@ All notable changes to this add-on are documented here. The format is based on [
 
 ## [Unreleased]
 
-## [0.1.0]
+## [0.1.0] - 2026-10-17
 
 ### Added
 
@@ -14,3 +14,6 @@ All notable changes to this add-on are documented here. The format is based on [
 - English and Portuguese (pt_PT) translations.
 - CI: lint, tests, zip build and `kodi-addon-checker` validation.
 - Documentation: installation guide and developer guide.
+
+[Unreleased]: https://github.com/RicardoPinheiro03/plugin.video.modernrtpplay/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/RicardoPinheiro03/plugin.video.modernrtpplay/releases/tag/v0.1.0

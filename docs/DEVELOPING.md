@@ -40,7 +40,7 @@ Design rules:
 
 - **Dependencies point one way:** `plugin` → `rtpplay` → `requests`. The client never imports Kodi, so it can be tested and reused anywhere.
 - **One public surface:** the UI talks to `RtpPlayClient` and gets typed, immutable models. It never sees HTML or HTTP.
-- **Fail loudly, inside the domain:** everything raised is an `RtpPlayError` subclass (`NetworkError`, `NotFoundError`, `RateLimitedError`, `ParseError`). The UI catches that one base class and shows a notification. Arguments are validated before any request is sent (`ValueError`).
+- **Fail loudly, inside the domain:** everything raised is an `RtpPlayError` subclass (`NetworkError`, `NotFoundError`, `RateLimitedError`, `ParseError`). The UI catches that one base class and shows a notification; a last-resort handler in `dispatch()` turns anything else into the same notification, so Kodi always gets an answer. Arguments are validated before any request is sent (`ValueError`).
 - **Side effects are injectable:** the HTTP session, clock, `sleep` and randomness are constructor parameters, so tests run instantly and deterministically.
 
 ## Rate limiting
@@ -48,12 +48,13 @@ Design rules:
 RTP Play is a public website, so the client is deliberately conservative (`rtpplay/http.py`):
 
 - **Client-side budget:** `RateLimiter` is a token bucket, by default a burst of 4 requests and then 2 per second. Every request goes through it.
-- **Server pushback:** HTTP 429, 502, 503, 504, connection errors and timeouts are retried up to 3 times. Each wait is exponential backoff (`1s, 2s, 4s…`, capped at 30s) with full jitter.
+- **Server pushback:** HTTP 429, 502, 503, 504, connection errors and timeouts are retried up to 3 times. Each wait is exponential backoff (`1s, 2s, 4s…`, capped at 30s) with full jitter. Other `requests` errors fail at once as `NetworkError`.
 - **`Retry-After`:** when the server sends it (seconds or an HTTP date), it replaces the computed delay. If it asks for more than 30s, the client gives up at once with `RateLimitedError(retry_after=…)` instead of freezing Kodi's UI. The add-on then shows "Try again in N seconds".
+- **Total wait budget:** all waits of one request together stay within 30s (`RetryPolicy.max_total_wait`). The client gives up rather than start a wait that would exceed it.
 - **No retries for client errors:** 404 raises `NotFoundError`; other unexpected statuses raise immediately.
 - **Few requests by design:** categories are a static table (zero requests), and each screen costs one request.
 
-Kodi starts a fresh Python process for every navigation, so the token bucket only spans a single action. That is fine because each action makes a single request. If a feature ever needs many requests per action, it is already covered.
+Kodi starts a fresh Python process for every navigation, so the token bucket only spans a single action. That is fine because each action makes a single request (plus at most 3 retries), and the total wait budget bounds how long one action can take. If a feature ever needs many requests per action, the bucket already spaces them out.
 
 The behaviour is pinned by `tests/client/test_rate_limiting.py`. Change those tests deliberately if you change the policy.
 
@@ -112,7 +113,7 @@ Category ids are a static table in `rtpplay/client.py` (`CATEGORIES`), because d
 
 ## Conventions
 
-- Python 3.8 compatible code (Kodi 20 still ships 3.8 on some platforms): use `from __future__ import annotations` and `typing.List` etc. Ruff enforces the target.
+- Python 3.8 compatible code (Kodi 20 still ships 3.8 on some platforms): use `from __future__ import annotations` and `typing.List` etc. Ruff's `target-version` only covers syntax, so CI also runs the test suite on a real Python 3.8 (`test-py38`).
 - Ruff for lint and formatting (`pyproject.toml`), 100-column lines.
 - Branches: `feat/…`, `fix/…`, `docs/…`, `ci/…`. One component or concern per pull request.
 - Commit messages: imperative subject, a body explaining *why*.
@@ -123,9 +124,10 @@ Category ids are a static table in `rtpplay/client.py` (`CATEGORIES`), because d
 
 | Job | What it does |
 | --- | --- |
-| `lint` | `ruff check` and `ruff format --check` |
-| `test` | `pytest` on Python 3.10 and 3.13 |
-| `build` | Runs after lint and test pass. Builds the zip, unpacks it and validates it with `kodi-addon-checker --branch omega` (so it checks exactly what ships), then uploads the zip as the `addon-zip` artifact |
+| `lint` | `ruff check`, `ruff format --check` and `mypy`; fails if compiled Python files (`__pycache__/`, `*.pyc`) are committed |
+| `test` | `pytest` on Python 3.10 and 3.13 with warnings as errors and a 90% branch-coverage gate |
+| `test-py38` | `pytest` on Python 3.8, the oldest Python that Kodi 20 ships |
+| `build` | Runs after lint and both test jobs pass. Builds the zip, unpacks it and validates it with `kodi-addon-checker` against Nexus (Kodi 20) and Omega (Kodi 21), so it checks exactly what ships, then uploads the zip as the `addon-zip` artifact |
 
 ## Releasing
 
