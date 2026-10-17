@@ -3,7 +3,7 @@ import pytest
 from conftest import load_fixture
 from rtpplay import parsers
 from rtpplay.errors import ParseError
-from rtpplay.models import DASH, HLS, PROGRESSIVE, RADIO, TV
+from rtpplay.models import DASH, HLS, PROGRESSIVE, RADIO, TV, Season
 
 
 def test_parse_programs():
@@ -23,6 +23,30 @@ def test_parse_episodes():
     assert first.title == "A Mosca - Pausa"
     assert first.path == "/play/p1525/e892592/a-mosca"
     assert first.date == "28 nov. 2025"
+
+
+def test_parse_numbered_episodes_label_with_the_episode_number():
+    # Series cards often carry only the program name in their link title.
+    episodes = parsers.parse_episodes(load_fixture("episodes_numbered.html"))
+    assert [e.title for e in episodes] == ["Ep. 1 - A Revolução", "Ep. 1"]
+    assert episodes[1].path == "/play/p17168/e955155/a-familia-hardacre"
+
+
+def test_parse_seasons_from_the_program_page_selector():
+    seasons = parsers.parse_seasons(load_fixture("program_seasons.html"))
+    assert seasons == [
+        Season(10209, "Temporada 2", 2),
+        Season(5057, "Temporada 1", 1),
+    ]
+
+
+def test_parse_seasons_of_a_single_season_program():
+    assert parsers.parse_seasons(load_fixture("program.html")) == []
+
+
+def test_parse_seasons_keeps_unnumbered_titles():
+    page = '<option value="/play/p1/x">Especial</option>'
+    assert parsers.parse_seasons(page) == [Season(1, "Especial", None)]
 
 
 def test_parse_search_results_join_program_and_episode_lead():
@@ -67,6 +91,17 @@ def test_parse_episode_stream_uses_last_player_and_deobfuscates():
     )
     assert stream.protocol == HLS
     assert not stream.is_live
+
+
+def test_parse_episode_stream_prefers_hls_on_drm_flagged_pages():
+    # Fiction pages name the HLS URL "fps" (FairPlay); it used to fall through to DASH.
+    stream = parsers.parse_episode_stream(load_fixture("episode_fiction.html"))
+    assert stream.url == (
+        "https://streaming-vod.rtp.pt/hls/nas2.share,"
+        "/pt/h264/512x384/p10209/p10209_1_20240501143408e001t7005d_lo.mp4,"
+        "/pt/h264/512x384/p10209/p10209_1_20240501143408e001t7005d.mp4,.urlset/master.m3u8"
+    )
+    assert stream.protocol == HLS
 
 
 def test_parse_episode_stream_progressive_audio():

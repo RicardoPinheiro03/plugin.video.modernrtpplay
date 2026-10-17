@@ -27,6 +27,7 @@ RATE_LIMITED_RETRY_IN = 30004
 RATE_LIMITED = 30005
 LOAD_FAILED = 30006
 SEARCH_HEADING = 30007
+SEASON = 30008
 
 ISA = "inputstream.adaptive"
 MIME_TYPES = {HLS: "application/vnd.apple.mpegurl", DASH: "application/dash+xml"}
@@ -48,6 +49,7 @@ class Addon:
             "live": self.live,
             "categories": self.categories,
             "programs": lambda: self.programs(int(params["category"]), _page(params)),
+            "seasons": lambda: self.seasons(int(params["program"])),
             "episodes": lambda: self.episodes(int(params["program"]), _page(params)),
             "search": lambda: self.search(params.get("query"), _page(params)),
             "play_live": lambda: self.play_live(params["channel"]),
@@ -98,10 +100,24 @@ class Addon:
     def programs(self, category_id: int, page: int) -> None:
         result = self._client.programs(category_id, page)
         items = [
-            self._folder(p.title, "episodes", thumbnail=p.thumbnail, program=p.id)
+            self._folder(p.title, "seasons", thumbnail=p.thumbnail, program=p.id)
             for p in result.items
         ]
         self._directory(self._with_next(items, result, "programs", category=category_id), "tvshows")
+
+    def seasons(self, program_id: int) -> None:
+        seasons = self._client.seasons(program_id)
+        if len(seasons) < 2:
+            # Nothing to choose from: go straight to the episodes.
+            self.episodes(program_id, 1)
+            return
+        items = []
+        for season in seasons:
+            label = season.title
+            if season.number is not None:
+                label = self._string(SEASON) % season.number
+            items.append(self._folder(label, "episodes", program=season.program_id))
+        self._directory(items, "seasons")
 
     def episodes(self, program_id: int, page: int) -> None:
         result = self._client.episodes(program_id, page)

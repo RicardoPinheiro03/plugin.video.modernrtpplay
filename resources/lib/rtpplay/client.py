@@ -8,7 +8,7 @@ from typing import List, Optional, TypeVar
 
 from . import parsers
 from .http import DEFAULT_HEADERS, HttpClient
-from .models import Category, Channel, Episode, Page, Program, Stream
+from .models import Category, Channel, Episode, Page, Program, Season, Stream
 
 T = TypeVar("T")
 
@@ -58,6 +58,11 @@ class RtpPlayClient:
             {"listcategory": category_id, "listtype": "az", "type": "all", "page": _page(page)},
         )
         return _paged(parsers.parse_programs(html), page, PROGRAMS_PAGE_SIZE)
+
+    def seasons(self, program_id: int) -> List[Season]:
+        """Seasons of a program, as the site lists them; empty if it has only one."""
+        # The program page ignores the slug after the id, so none is needed.
+        return parsers.parse_seasons(self._http.get_text("/play/p{}/".format(program_id)))
 
     def episodes(self, program_id: int, page: int = 1) -> Page[Episode]:
         """Episodes of a program, newest first."""

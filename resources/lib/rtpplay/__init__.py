@@ -12,7 +12,7 @@ This package has no Kodi dependencies, so it can be used and tested on its own::
 from .client import RtpPlayClient
 from .errors import NetworkError, NotFoundError, ParseError, RateLimitedError, RtpPlayError
 from .http import HttpClient, RateLimiter, RetryPolicy
-from .models import Category, Channel, Episode, Page, Program, Stream
+from .models import Category, Channel, Episode, Page, Program, Season, Stream
 
 __all__ = [
     "Category",
@@ -29,5 +29,6 @@ __all__ = [
     "RetryPolicy",
     "RtpPlayClient",
     "RtpPlayError",
+    "Season",
     "Stream",
 ]

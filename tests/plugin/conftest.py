@@ -21,6 +21,7 @@ STRINGS = {
     30005: "Rate limited",
     30006: "Load failed",
     30007: "Search RTP Play",
+    30008: "Season %s",
 }
 
 
