@@ -182,9 +182,10 @@ class HttpClient:
                 raise self._give_up(status, url, retry_after)
             if attempt >= self._retry.max_retries:
                 raise self._give_up(status, url, retry_after)
-            delay = retry_after
-            if delay is None:
+            if retry_after is None:
                 delay = self._retry.backoff(attempt, self._rand)
+            else:
+                delay = retry_after
             if not self._fits(waited, delay):
                 raise self._give_up(status, url, retry_after)
             self._wait(delay, url, "HTTP {}".format(status))
