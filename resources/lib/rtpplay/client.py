@@ -60,7 +60,7 @@ class RtpPlayClient:
         return _paged(parsers.parse_programs(html), page, PROGRAMS_PAGE_SIZE)
 
     def seasons(self, program_id: int) -> List[Season]:
-        """Seasons of a program, as the site lists them; empty if it has only one."""
+        """Seasons of a program, as the site lists them; empty or one item if it has only one."""
         # The program page ignores the slug after the id, so none is needed.
         return parsers.parse_seasons(self._http.get_text("/play/p{}/".format(program_id)))
 

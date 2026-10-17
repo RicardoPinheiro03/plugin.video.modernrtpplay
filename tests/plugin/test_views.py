@@ -125,11 +125,11 @@ def test_seasons_list_each_season_as_a_folder(kodi):
     assert kodi.content == "seasons"
 
 
-@pytest.mark.parametrize("seasons", [[], [Season(1525, "Temporada 1", 1)]])
-def test_single_season_programs_go_straight_to_episodes(kodi, seasons):
+@pytest.mark.parametrize("seasons, listed", [([], 1525), ([Season(1600, "Temporada 1", 1)], 1600)])
+def test_single_season_programs_go_straight_to_episodes(kodi, seasons, listed):
     client = FakeClient(seasons=seasons)
     run(client, action="seasons", program=1525)
-    assert client.calls == [("seasons", 1525), ("episodes", 1525, 1)]
+    assert client.calls == [("seasons", 1525), ("episodes", listed, 1)]
     assert params_of(kodi.items[0][0])["action"] == "play_episode"
     assert kodi.content == "episodes"
 

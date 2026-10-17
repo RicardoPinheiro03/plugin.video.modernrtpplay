@@ -109,7 +109,7 @@ class Addon:
         seasons = self._client.seasons(program_id)
         if len(seasons) < 2:
             # Nothing to choose from: go straight to the episodes.
-            self.episodes(program_id, 1)
+            self.episodes(seasons[0].program_id if seasons else program_id, 1)
             return
         items = []
         for season in seasons:

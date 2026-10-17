@@ -44,9 +44,17 @@ def test_parse_seasons_of_a_single_season_program():
     assert parsers.parse_seasons(load_fixture("program.html")) == []
 
 
-def test_parse_seasons_keeps_unnumbered_titles():
-    page = '<option value="/play/p1/x">Especial</option>'
-    assert parsers.parse_seasons(page) == [Season(1, "Especial", None)]
+def test_parse_seasons_keeps_titles_that_are_not_plain_season_numbers():
+    page = (
+        '<div class="container seasons-container"><select>'
+        '<option value="/play/p1/x">Especial 25 Anos</option>'
+        '<option value="/play/p2/x">Temporada 2023/2024</option></select></div>'
+        '<select><option value="/play/p3/related">Other program</option></select>'
+    )
+    assert parsers.parse_seasons(page) == [
+        Season(1, "Especial 25 Anos", None),
+        Season(2, "Temporada 2023/2024", None),
+    ]
 
 
 def test_parse_search_results_join_program_and_episode_lead():

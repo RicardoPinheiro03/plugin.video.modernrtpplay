@@ -28,8 +28,9 @@ _EPISODE_LEAD = re.compile(r'<span class="episode-lead">(.*?)</span>', re.S)
 _EPISODE_DATE = re.compile(r'<(?:div|span) class="episode-date">(.*?)</(?:div|span)>', re.S)
 _EPISODE_NUMBER = re.compile(r'<div class="episode">(.*?)</div>', re.S)
 
+_SEASON_SELECT = re.compile(r'class="[^"]*\bseasons-container\b.*?<select\b.*?</select>', re.S)
 _SEASON_OPTION = re.compile(r'<option value="/play/p(\d+)/[^"]*"[^>]*>(.*?)</option>', re.S)
-_SEASON_NUMBER = re.compile(r"(\d+)")
+_SEASON_NUMBER = re.compile(r"Temporada (\d+)", re.I)
 
 _CHANNEL = re.compile(
     r'<span id="(?P<kind>tv|radio)-\d+"[^>]*>\s*'
@@ -80,7 +81,7 @@ def parse_episodes(fragment: str) -> List[Episode]:
         number = _first(_EPISODE_NUMBER, article)
         lead = _first(_EPISODE_LEAD, article)
         title = _first(_EPISODE_TITLE, article)
-        if number:
+        if number and not lead:
             label = "{} - {}".format(number, title) if title else number
         else:
             label = _join_title(title, lead) or _strip_prefix(link.group("title"))
@@ -103,13 +104,14 @@ def parse_seasons(page: str) -> List[Season]:
     Each season is a separate program. Programs with a single season have no
     selector, so this returns ``[]`` for them.
     """
-    seasons: List[Season] = []
-    # The page repeats the selector (one per layout), so keep the first of each.
-    for program_id, label in _SEASON_OPTION.findall(page):
-        if any(season.program_id == int(program_id) for season in seasons):
-            continue
+    # The page repeats the selector (one per layout); the first one is enough.
+    select = _SEASON_SELECT.search(page)
+    if not select:
+        return []
+    seasons = []
+    for program_id, label in _SEASON_OPTION.findall(select.group(0)):
         title = _clean_text(label)
-        number = _SEASON_NUMBER.search(title)
+        number = _SEASON_NUMBER.fullmatch(title)
         seasons.append(Season(int(program_id), title, int(number.group(1)) if number else None))
     return seasons
 
