@@ -27,6 +27,8 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: ruff check --output-format=github .
       - run: ruff format --check .
+      # resources/lib arrives with the client and add-on PRs; type-check it once it exists.
+      - run: mypy scripts $(test -d resources/lib && echo resources/lib)
       - name: No compiled Python files committed
         run: |
           if git ls-files | grep -E '(^|/)__pycache__/|\.py[co]$'; then

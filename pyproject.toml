@@ -11,6 +11,18 @@ select = ["E", "F", "W", "I", "B", "BLE", "C4", "ISC", "PIE", "SIM"]
 [tool.ruff.lint.isort]
 known-first-party = ["rtpplay", "plugin", "conftest", "build_zip"]
 
+[tool.mypy]
+# mypy cannot target 3.8; 3.8 itself is covered by ruff's target-version and test-py38.
+python_version = "3.9"
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[[tool.mypy.overrides]]
+# Kodi's modules only exist inside Kodi.
+module = ["xbmc", "xbmcaddon", "xbmcgui", "xbmcplugin"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra --strict-markers --strict-config"
