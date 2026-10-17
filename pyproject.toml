@@ -1,0 +1,15 @@
+# Tooling configuration only: the add-on itself is packaged by scripts/build_zip.py.
+
+[tool.ruff]
+line-length = 100
+# Kodi 20 ships Python 3.8 on some platforms; keep the add-on code compatible.
+target-version = "py38"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["rtpplay", "plugin", "conftest", "build_zip"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
