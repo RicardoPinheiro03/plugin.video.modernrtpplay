@@ -33,3 +33,13 @@ def test_build_packages_runtime_files_under_the_addon_folder(tmp_path):
             "plugin.video.test/main.py",
             "plugin.video.test/resources/lib/rtpplay/client.py",
         ]
+
+
+def test_main_prints_the_zip_path(tmp_path, monkeypatch, capsys):
+    root = str(tmp_path / "repo")
+    write(os.path.join(root, "addon.xml"), ADDON_XML)
+    monkeypatch.setattr(build_zip, "ROOT", root)
+
+    assert build_zip.main(["--output", str(tmp_path / "out")]) == 0
+
+    assert capsys.readouterr().out.strip() == str(tmp_path / "out" / "plugin.video.test-1.2.3.zip")
