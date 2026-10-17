@@ -1,0 +1,107 @@
+import pytest
+
+from conftest import load_fixture
+from rtpplay import parsers
+from rtpplay.errors import ParseError
+from rtpplay.models import DASH, HLS, PROGRESSIVE, RADIO, TV
+
+
+def test_parse_programs():
+    programs = parsers.parse_programs(load_fixture("programs.html"))
+    assert [(p.id, p.title) for p in programs] == [
+        (17251, "15:17 Destino Paris"),
+        (13632, "2 Duros de Roer"),
+    ]
+    assert programs[0].thumbnail.startswith("https://cdn-images.rtp.pt/")
+
+
+def test_parse_episodes():
+    episodes = parsers.parse_episodes(load_fixture("episodes.html"))
+    first = episodes[0]
+    assert len(episodes) == 2
+    assert (first.program_id, first.id) == (1525, 892592)
+    assert first.title == "A Mosca - Pausa"
+    assert first.path == "/play/p1525/e892592/a-mosca"
+    assert first.date == "28 nov. 2025"
+
+
+def test_parse_search_results_join_program_and_episode_lead():
+    episodes = parsers.parse_episodes(load_fixture("search.html"))
+    assert episodes[0].title == "Telejornal Açores - Telejornal, 10 de agosto"
+    assert episodes[0].path == "/play/p56/e422725/telejornal-acores"
+
+
+def test_parse_lists_ignore_empty_fragments():
+    assert parsers.parse_programs("") == []
+    assert parsers.parse_episodes("<!-- no more -->") == []
+
+
+def test_parse_live_channels():
+    channels = parsers.parse_live_channels(load_fixture("live.html"))
+    assert [(c.slug, c.name, c.kind) for c in channels] == [
+        ("rtp1", "RTP1", TV),
+        ("antena1", "RTP Antena 1", RADIO),
+    ]
+    assert channels[0].now_playing == "Estrelas ao Sábado"
+    assert channels[0].thumbnail.startswith("https://")
+
+
+def test_parse_live_channels_fails_loudly_when_markup_changes():
+    with pytest.raises(ParseError):
+        parsers.parse_live_channels("<html></html>")
+
+
+def test_parse_live_stream():
+    stream = parsers.parse_live_stream(load_fixture("live_channel.html"))
+    assert stream.url.startswith("https://streaming-live.rtp.pt/liverepeater/smil:rtp1HD.smil/")
+    assert "tk=" in stream.url
+    assert stream.protocol == HLS
+    assert stream.is_live
+
+
+def test_parse_episode_stream_uses_last_player_and_deobfuscates():
+    stream = parsers.parse_episode_stream(load_fixture("episode_tv.html"))
+    assert stream.url == (
+        "https://streaming-vod.rtp.pt/hls/nas2.share,/h264/512x384/p1525/"
+        "p1525_1_2025112820842.mp4,.urlset/master.m3u8"
+    )
+    assert stream.protocol == HLS
+    assert not stream.is_live
+
+
+def test_parse_episode_stream_progressive_audio():
+    stream = parsers.parse_episode_stream(load_fixture("episode_radio.html"))
+    assert stream.url.endswith(".mp3")
+    assert stream.protocol == PROGRESSIVE
+
+
+def test_parse_episode_stream_rewrites_drm_paths_to_clear_ones():
+    page = 'var f = {hls : "https://streaming-vod.rtp.pt/drm-fps/a/master.m3u8"};'
+    assert (
+        parsers.parse_episode_stream(page).url == "https://streaming-vod.rtp.pt/hls/a/master.m3u8"
+    )
+
+
+def test_parse_episode_stream_falls_back_to_dash():
+    page = 'var f = {hls : "", dash : "https://streaming-vod.rtp.pt/drm-dash/a/manifest.mpd"};'
+    stream = parsers.parse_episode_stream(page)
+    assert stream.url == "https://streaming-vod.rtp.pt/dash/a/manifest.mpd"
+    assert stream.protocol == DASH
+
+
+def test_parse_episode_stream_skips_dead_legacy_host():
+    page = 'var f = {hls : "https://streaming-ondemand.rtp.pt/x/masters.m3u8"};'
+    with pytest.raises(ParseError):
+        parsers.parse_episode_stream(page)
+
+
+def test_parse_episode_stream_without_player():
+    with pytest.raises(ParseError):
+        parsers.parse_episode_stream("<html></html>")
+
+
+@pytest.mark.parametrize("parts", ['["%ZZ"]', '["/w=="]', "[1]"])
+def test_parse_episode_stream_reports_broken_obfuscation_as_parse_error(parts):
+    page = 'var f = {hls : atob(decodeURIComponent(%s.join("")))};' % parts
+    with pytest.raises(ParseError):
+        parsers.parse_episode_stream(page)
