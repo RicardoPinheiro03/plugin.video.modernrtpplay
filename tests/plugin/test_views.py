@@ -75,11 +75,7 @@ def test_parse_argv_without_query():
 
 def test_root_menu(kodi):
     run(FakeClient())
-    assert [params_of(url)["action"] for url, _, _ in kodi.items] == [
-        "live",
-        "categories",
-        "search",
-    ]
+    assert [params_of(url)["action"] for url, _, _ in kodi.items] == ["categories", "search"]
     assert all(is_folder for _, _, is_folder in kodi.items)
     assert kodi.end["succeeded"]
 

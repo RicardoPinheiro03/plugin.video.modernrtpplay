@@ -4,6 +4,10 @@ All notable changes to this add-on are documented here. The format is based on [
 
 ## [Unreleased]
 
+### Removed
+
+- *Live TV & Radio* from the main menu, until it's reworked (see `docs/FUTURE.md`). The client code for live channels is kept.
+
 ## [0.1.0] - 2026-10-17
 
 ### Added
