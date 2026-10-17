@@ -177,11 +177,49 @@ def test_failed_playback_is_reported_to_kodi(kodi):
     assert kodi.resolved[0] is False
 
 
-def test_unknown_action_is_ignored(kodi):
+def test_unknown_action_is_ignored_but_still_ends_the_directory(kodi):
     client = FakeClient()
     run(client, action="nope")
     assert client.calls == []
     assert kodi.items == []
+    assert kodi.end["succeeded"] is False
+
+
+@pytest.mark.parametrize(
+    "params",
+    [
+        {"action": "programs", "category": "9", "page": "abc"},
+        {"action": "programs"},
+        {"action": "episodes", "program": "x"},
+    ],
+)
+def test_malformed_parameters_fail_cleanly(kodi, params):
+    run(FakeClient(), **params)
+    assert kodi.notifications == [("RTP Play", "Load failed")]
+    assert kodi.end["succeeded"] is False
+
+
+def test_unexpected_errors_still_end_the_directory(kodi):
+    run(FakeClient(KeyError("bug")), action="live")
+    assert kodi.notifications == [("RTP Play", "Load failed")]
+    assert kodi.end["succeeded"] is False
+
+
+def test_unexpected_errors_during_playback_still_resolve(kodi):
+    run(FakeClient(TypeError("bug")), action="play_live", channel="rtp1")
+    assert kodi.resolved[0] is False
+
+
+def test_stream_headers_encode_spaces_as_percent_20(kodi):
+    kodi.installed_addons.add("inputstream.adaptive")
+    client = FakeClient()
+    client.live_stream = lambda slug: Stream(
+        "https://live/x.m3u8", HLS, {"User-Agent": "Mozilla/5.0 (X11; Linux)"}
+    )
+    run(client, action="play_live", channel="rtp1")
+    _, item = kodi.resolved
+    assert item.path.endswith("|User-Agent=Mozilla%2F5.0%20%28X11%3B%20Linux%29")
+    assert "+" not in item.properties["inputstream.adaptive.manifest_headers"]
 
 
 @pytest.mark.parametrize("page, expected", [("0", 1), ("-3", 1), ("4", 4)])

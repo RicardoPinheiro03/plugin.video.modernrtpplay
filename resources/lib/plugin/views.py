@@ -3,15 +3,15 @@
 from __future__ import annotations
 
 import logging
-from typing import Callable, Dict, List, Optional, Tuple
-from urllib.parse import urlencode
+from typing import Any, Callable, Dict, List, Optional, Tuple
+from urllib.parse import quote, urlencode
 
 import xbmc
 import xbmcaddon
 import xbmcgui
 import xbmcplugin
 
-from rtpplay import Page, RateLimitedError, RtpPlayClient, RtpPlayError, Stream
+from rtpplay import Episode, Page, RateLimitedError, RtpPlayClient, RtpPlayError, Stream
 from rtpplay.models import DASH, HLS, RADIO
 
 from .routing import Request, build_url
@@ -55,12 +55,17 @@ class Addon:
         }
         action = params.get("action", "root")
         if action not in actions:
+            # Stale favourites can point at renamed actions; Kodi still needs an answer.
             log.error("Unknown action %r", action)
+            xbmcplugin.endOfDirectory(self._handle, succeeded=False)
             return
         try:
             actions[action]()
         except RtpPlayError as error:
             self._fail(action, error)
+        except Exception:  # noqa: BLE001 - last resort: Kodi must always get an answer
+            log.exception("Action %s crashed", action)
+            self._fail(action, None)
 
     # --- Listings ---------------------------------------------------------
 
@@ -127,7 +132,9 @@ class Addon:
         self._resolve(self._client.episode_stream(path))
 
     def _resolve(self, stream: Stream) -> None:
-        headers = urlencode(stream.headers)
+        # %20 rather than "+" for spaces: Kodi and InputStream Adaptive decode headers
+        # with their own URL decoders, and only %-escapes are unambiguous to all of them.
+        headers = urlencode(stream.headers, quote_via=quote)
         item = xbmcgui.ListItem(path="{}|{}".format(stream.url, headers), offscreen=True)
         item.setContentLookup(False)
         if stream.protocol in MIME_TYPES:
@@ -140,21 +147,25 @@ class Addon:
 
     # --- Helpers ----------------------------------------------------------
 
-    def _episode_items(self, page: Page) -> List[DirectoryItem]:
+    def _episode_items(self, page: Page[Episode]) -> List[DirectoryItem]:
         items = []
         for episode in page.items:
             item = self._playable(episode.title, episode.thumbnail, plot=episode.date)
             items.append((self._url("play_episode", path=episode.path), item, False))
         return items
 
-    def _with_next(self, items: List[DirectoryItem], page: Page, action: str, **params: object):
+    def _with_next(
+        self, items: List[DirectoryItem], page: Page[Any], action: str, **params: object
+    ) -> List[DirectoryItem]:
         if page.has_more:
-            items.append(
-                self._folder(self._string(NEXT_PAGE), action, page=page.page + 1, **params)
-            )
+            # thumbnail is passed positionally so **params can never bind to it.
+            label = self._string(NEXT_PAGE)
+            items.append(self._folder(label, action, None, page=page.page + 1, **params))
         return items
 
-    def _folder(self, label: str, action: str, thumbnail: Optional[str] = None, **params: object):
+    def _folder(
+        self, label: str, action: str, thumbnail: Optional[str] = None, **params: object
+    ) -> DirectoryItem:
         item = xbmcgui.ListItem(label, offscreen=True)
         if thumbnail:
             item.setArt({"thumb": thumbnail, "poster": thumbnail})
@@ -163,7 +174,7 @@ class Addon:
     @staticmethod
     def _playable(
         label: str, thumbnail: Optional[str], plot: Optional[str] = None, media: str = "video"
-    ):
+    ) -> xbmcgui.ListItem:
         item = xbmcgui.ListItem(label, offscreen=True)
         item.setProperty("IsPlayable", "true")
         if thumbnail:
@@ -189,8 +200,10 @@ class Addon:
     def _string(self, string_id: int) -> str:
         return self._addon.getLocalizedString(string_id)
 
-    def _fail(self, action: str, error: RtpPlayError) -> None:
-        log.error("Action %s failed: %s", action, error)
+    def _fail(self, action: str, error: Optional[RtpPlayError]) -> None:
+        """Tell the user and end the request; ``error`` is None for unexpected crashes."""
+        if error is not None:
+            log.error("Action %s failed: %s", action, error)
         if isinstance(error, RateLimitedError):
             if error.retry_after:
                 message = self._string(RATE_LIMITED_RETRY_IN) % int(error.retry_after)
