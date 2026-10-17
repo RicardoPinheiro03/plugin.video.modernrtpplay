@@ -29,8 +29,7 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - run: ruff check --output-format=github .
       - run: ruff format --check .
-      # resources/lib arrives with the client and add-on PRs; type-check it once it exists.
-      - run: mypy scripts $(test -d resources/lib && echo resources/lib)
+      - run: mypy
       - name: No compiled Python files committed
         run: |
           if git ls-files | grep -E '(^|/)__pycache__/|\.py[co]$'; then
@@ -82,21 +81,17 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-dev.txt
       - run: pip install -r requirements-dev.txt
-      # The add-on manifest arrives in its own pull request; skip packaging until it exists.
       - name: Build add-on zip
-        if: hashFiles('addon.xml') != ''
         run: python scripts/build_zip.py --output dist
       # Validate exactly what ships: the checker runs on the unpacked zip, against
       # the oldest supported Kodi (nexus, 20) and the current one (omega, 21).
       - name: Validate with kodi-addon-checker
-        if: hashFiles('addon.xml') != ''
         run: |
           mkdir -p check
           unzip -q dist/*.zip -d check
           kodi-addon-checker --branch nexus check/*
           kodi-addon-checker --branch omega check/*
       - name: Upload zip
-        if: hashFiles('addon.xml') != ''
         uses: actions/upload-artifact@v4
         with:
           name: addon-zip

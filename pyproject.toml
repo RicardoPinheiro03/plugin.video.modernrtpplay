@@ -14,6 +14,7 @@ known-first-party = ["rtpplay", "plugin", "conftest", "build_zip"]
 [tool.mypy]
 # mypy cannot target 3.8; 3.8 itself is covered by ruff's target-version and test-py38.
 python_version = "3.9"
+files = ["scripts", "resources/lib"]
 check_untyped_defs = true
 warn_unused_ignores = true
 warn_redundant_casts = true
