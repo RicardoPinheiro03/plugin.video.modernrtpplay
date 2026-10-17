@@ -15,8 +15,10 @@ from __future__ import annotations
 import email.utils
 import logging
 import random
+import re
 import time
 from dataclasses import dataclass
+from datetime import timezone
 from typing import Callable, Mapping, Optional
 
 import requests
@@ -36,6 +38,12 @@ DEFAULT_HEADERS = {
 }
 
 RETRYABLE_STATUS = frozenset({429, 502, 503, 504})
+# A truncated chunked body is as transient as a dropped connection.
+RETRYABLE_ERRORS = (
+    requests.ConnectionError,
+    requests.Timeout,
+    requests.exceptions.ChunkedEncodingError,
+)
 
 
 class RateLimiter:
@@ -79,12 +87,15 @@ class RetryPolicy:
     with full jitter. A server-provided ``Retry-After`` replaces the computed
     delay; if it is longer than ``max_retry_after`` we give up immediately,
     because blocking Kodi's UI for minutes is worse than showing an error.
+    For the same reason all waits of one request together stay within
+    ``max_total_wait``: we give up rather than start a wait that would exceed it.
     """
 
     max_retries: int = 3
     backoff_base: float = 1.0
     max_backoff: float = 30.0
     max_retry_after: float = 30.0
+    max_total_wait: float = 30.0
 
     def backoff(self, attempt: int, rand: Callable[[], float]) -> float:
         return min(self.max_backoff, self.backoff_base * (2**attempt)) * rand()
@@ -97,7 +108,8 @@ def parse_retry_after(
     if not value:
         return None
     value = value.strip()
-    if value.isdigit():
+    # str.isdigit() also accepts non-ASCII digits such as "²", which float() rejects.
+    if re.fullmatch(r"[0-9]+", value):
         return float(value)
     try:
         when = email.utils.parsedate_to_datetime(value)
@@ -105,6 +117,8 @@ def parse_retry_after(
         return None
     if when is None:
         return None
+    if when.tzinfo is None:  # "-0000" zone: UTC, but parsed as naive (local) time
+        when = when.replace(tzinfo=timezone.utc)
     return max(0.0, when.timestamp() - now())
 
 
@@ -137,18 +151,23 @@ class HttpClient:
         """GET ``path`` (relative to www.rtp.pt) and return the response body."""
         url = path if path.startswith("http") else BASE_URL + path
         attempt = 0
+        waited = 0.0
         while True:
             self._limiter.acquire()
             try:
                 response = self._session.get(
                     url, params=params, headers=DEFAULT_HEADERS, timeout=self._timeout
                 )
-            except (requests.ConnectionError, requests.Timeout) as exc:
-                if attempt >= self._retry.max_retries:
+            except RETRYABLE_ERRORS as exc:
+                delay = self._retry.backoff(attempt, self._rand)
+                if attempt >= self._retry.max_retries or not self._fits(waited, delay):
                     raise NetworkError("Could not reach {}: {}".format(url, exc)) from exc
-                self._wait(self._retry.backoff(attempt, self._rand), url, str(exc))
+                self._wait(delay, url, str(exc))
+                waited += delay
                 attempt += 1
                 continue
+            except requests.RequestException as exc:
+                raise NetworkError("Request to {} failed: {}".format(url, exc)) from exc
 
             status = response.status_code
             if status == 200:
@@ -166,8 +185,14 @@ class HttpClient:
             delay = retry_after
             if delay is None:
                 delay = self._retry.backoff(attempt, self._rand)
+            if not self._fits(waited, delay):
+                raise self._give_up(status, url, retry_after)
             self._wait(delay, url, "HTTP {}".format(status))
+            waited += delay
             attempt += 1
+
+    def _fits(self, waited: float, delay: float) -> bool:
+        return waited + delay <= self._retry.max_total_wait
 
     def _wait(self, delay: float, url: str, reason: str) -> None:
         log.warning("Retrying %s in %.1fs (%s)", url, delay, reason)

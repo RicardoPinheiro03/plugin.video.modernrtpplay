@@ -98,3 +98,10 @@ def test_parse_episode_stream_skips_dead_legacy_host():
 def test_parse_episode_stream_without_player():
     with pytest.raises(ParseError):
         parsers.parse_episode_stream("<html></html>")
+
+
+@pytest.mark.parametrize("parts", ['["%ZZ"]', '["/w=="]', "[1]"])
+def test_parse_episode_stream_reports_broken_obfuscation_as_parse_error(parts):
+    page = 'var f = {hls : atob(decodeURIComponent(%s.join("")))};' % parts
+    with pytest.raises(ParseError):
+        parsers.parse_episode_stream(page)

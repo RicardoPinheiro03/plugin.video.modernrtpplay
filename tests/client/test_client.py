@@ -80,3 +80,11 @@ def test_episode_stream_rejects_foreign_urls():
     with pytest.raises(ValueError):
         client.episode_stream("https://evil.example/play/x")
     assert session.requests == []
+
+
+@pytest.mark.parametrize("slug", ["", "../bg_l_s/?listQuery=x", "rtp1/../x"])
+def test_live_stream_rejects_invalid_slugs_before_any_request(slug):
+    client, session = make_client()
+    with pytest.raises(ValueError, match="channel_slug"):
+        client.live_stream(slug)
+    assert session.requests == []
