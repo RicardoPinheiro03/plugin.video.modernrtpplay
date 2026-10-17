@@ -1,0 +1,36 @@
+<script>
+let hls_url = "https://streaming-live.rtp.pt/liverepeater/smil:rtp1HD.smil/playlist.m3u8?tk=1792292400_b17d6856203682d484167d12371b58c82de96a5e";
+  if (isSafari) {
+    hls_url = hls_url.replace(/\?dvr$/i, ''); // HLS NO DVR for Safari
+  } 
+  var playerlive = new RTPPlayer({
+		id:"player_prog",
+		
+		
+		fileKey: "2ch5h264",
+    channelKey : "rtp1",
+    
+		posterNoRights: "//cdn-images.rtp.pt/play/images/direitos_play_live_rtp1_012226260903.jpg?v=202610171800",
+		file:  { fps:"" , hls: hls_url, dash:"://?tk=1792292400_b103695c30049c8c5868e7a8891b39574141a1e7"},
+		streamType:liveType,
+		
+		mediaType: "video",
+		googleCast:true, extraSettings: { googleCastReceiverAppId:'1A6F2224', shakaCapLevelToPlayerSize: false, hlsJSCapLevelToPlayerSize: false, capLevelToPlayerSize: false, ignoreDevicePixelRatio: false },
+		poster: "https://cdn-images.rtp.pt/common/img/channels/logos/color/horizontal/5-372126260903.png",
+    modules: [{ name: 'RTPConviva', bucket: '1', initOn: 'htmlmediaelementappendedtodom' }],
+    subadUnit: "Play",
+    metadata: {
+      id: "5",
+      program: {
+        title: "Estrelas ao Sábado",
+        duration: "01:01:00",
+        type: "Entretenimento"
+      },
+      channel: {
+        id: "5",
+        name: "RTP1"
+      }
+    }
+	});
+	playerlive.newPlayer();
+</script>
