@@ -153,8 +153,7 @@ def test_cancelled_search_does_not_hit_the_site(kodi):
     assert kodi.end["succeeded"] is False
 
 
-def test_play_hls_uses_inputstream_adaptive_when_installed(kodi):
-    kodi.installed_addons.add("inputstream.adaptive")
+def test_play_hls_uses_inputstream_adaptive(kodi):
     run(FakeClient(), action="play_live", channel="rtp1")
     succeeded, item = kodi.resolved
     assert succeeded
@@ -164,13 +163,6 @@ def test_play_hls_uses_inputstream_adaptive_when_installed(kodi):
     assert item.properties["inputstream.adaptive.stream_headers"] == item.path.split("|", 1)[1]
     assert item.mime_type == "application/vnd.apple.mpegurl"
     assert item.content_lookup is False
-
-
-def test_play_hls_falls_back_to_kodi_player_without_inputstream(kodi):
-    run(FakeClient(), action="play_live", channel="rtp1")
-    _, item = kodi.resolved
-    assert "inputstream" not in item.properties
-    assert "|" in item.path
 
 
 def test_play_progressive_audio(kodi):
@@ -231,7 +223,6 @@ def test_unexpected_errors_during_playback_still_resolve(kodi):
 
 
 def test_stream_headers_encode_spaces_as_percent_20(kodi):
-    kodi.installed_addons.add("inputstream.adaptive")
     client = FakeClient()
     client.live_stream = lambda slug: Stream(
         "https://live/x.m3u8", HLS, {"User-Agent": "Mozilla/5.0 (X11; Linux)"}

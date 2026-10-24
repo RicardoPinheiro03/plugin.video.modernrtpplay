@@ -9,7 +9,7 @@ target-version = "py38"
 select = ["E", "F", "W", "I", "B", "BLE", "C4", "ISC", "PIE", "SIM"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["rtpplay", "plugin", "conftest", "build_zip"]
+known-first-party = ["rtpplay", "plugin", "conftest", "build_zip", "build_repo"]
 
 [tool.mypy]
 # mypy cannot target 3.8; 3.8 itself is covered by ruff's target-version and test-py38.
