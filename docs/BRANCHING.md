@@ -98,4 +98,4 @@ Still open:
 
 ## Adopting it now
 
-`0.2.0` is released on `main` (#12) but not tagged yet. Start the first release line from that commit: `git switch -c release/0.2 7bcbb25`, push it, then tag `v0.2.0` there as in *Minor or major release*, step 2.
+`release/0.2` was cut at `0304106`, the merge of #13, rather than at the #12 version bump (`7bcbb25`). Both are version 0.2.0 with the same add-on code, but the release workflow runs from the tagged commit, so cutting after #13 gives the first release the release index page and path-filtered CI. The 20-minute build timeout (#16) is cherry-picked onto it before `v0.2.0` is tagged.
