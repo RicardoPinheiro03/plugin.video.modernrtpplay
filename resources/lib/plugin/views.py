@@ -19,6 +19,7 @@ from .routing import Request, build_url
 log = logging.getLogger(__name__)
 
 # Localized string ids (resources/language/*/strings.po).
+LIVE = 30000
 PROGRAMS = 30001
 SEARCH = 30002
 NEXT_PAGE = 30003
@@ -73,6 +74,7 @@ class Addon:
     def root(self) -> None:
         self._directory(
             [
+                self._folder(self._string(LIVE), "live"),
                 self._folder(self._string(PROGRAMS), "categories"),
                 self._folder(self._string(SEARCH), "search"),
             ]

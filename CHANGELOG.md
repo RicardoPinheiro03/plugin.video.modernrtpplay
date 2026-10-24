@@ -8,9 +8,9 @@ All notable changes to this add-on are documented here. The format is based on [
 
 - Opening a show lists its seasons first, then the episodes of the chosen season. Shows with a single season still open straight to their episodes. Series episodes are labelled with their number and title (e.g. "Ep. 1 - A Revolução").
 
-### Removed
+### Added
 
-- *Live TV & Radio* from the main menu, until it's reworked (see `docs/FUTURE.md`). The client code for live channels is kept.
+- *Live TV & Radio* is back in the main menu: play RTP's live TV channels and radio stations over HLS.
 
 ### Fixed
 

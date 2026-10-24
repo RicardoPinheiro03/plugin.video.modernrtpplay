@@ -8,6 +8,7 @@ It replaces [plugin.video.rtpplay](https://github.com/enen92/plugin.video.rtppla
 
 ## Features
 
+- **Live TV & Radio**: RTP's live TV channels and radio stations
 - **Programs**: all programs per category (A–Z), with paginated episode lists
 - **Search** across the RTP Play catalogue
 - Plays HLS, DASH and direct audio/video; uses `inputstream.adaptive` when installed
