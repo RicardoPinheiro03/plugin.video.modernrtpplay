@@ -8,7 +8,11 @@ All notable changes to this add-on are documented here. The format is based on [
 
 - *TV Shows* and *Movies* in the main menu, built from RTP Play's series and film collections. Films play straight from the list; shows open their seasons. Both show their synopsis, year, poster and fan art.
 - Episode lists show each episode's synopsis and duration.
-- A cache in the add-on's profile folder (`cache.db`), so revisiting a list costs no requests: collections for 6 hours, program details for a day, episode details for 30 days.
+- A cache in the add-on's profile folder (`cache.db`), so revisiting a list costs no requests: collections for 6 hours, program details for a day, episode details for 30 days. The first visit to a list page takes a few seconds while it fetches synopses.
+
+### Changed
+
+- A show's season list is now cached for a day, so a newly published season can take up to a day to appear.
 
 ## [0.2.0] - 2026-10-24
 

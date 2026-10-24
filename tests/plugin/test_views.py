@@ -3,7 +3,7 @@ from urllib.parse import parse_qsl, urlparse
 import pytest
 
 from plugin.routing import Request, build_url, parse_argv
-from plugin.views import Addon
+from plugin.views import Addon, _fetch_some
 from rtpplay import (
     Category,
     Channel,
@@ -364,3 +364,14 @@ def test_page_is_clamped_to_one(kodi, page, expected):
     client = FakeClient()
     run(client, action="episodes", program=1, page=page)
     assert client.calls[0] == ("episodes", 1, expected)
+
+
+def test_details_stop_once_the_time_budget_is_spent():
+    now = [0.0]
+
+    def fetch(key):
+        now[0] += 4  # each request takes 4 s
+        return key * 10
+
+    details = _fetch_some(fetch, [1, 2, 3, 4], clock=lambda: now[0])
+    assert details == {1: 10, 2: 20, 3: 30}  # the 4th would start after 12 s > 10 s

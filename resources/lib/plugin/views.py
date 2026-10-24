@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, TypeVar
 from urllib.parse import quote, urlencode
 
@@ -41,6 +42,9 @@ MOVIES_LABEL = 30010
 
 ISA = "inputstream.adaptive"
 MIME_TYPES = {HLS: "application/vnd.apple.mpegurl", DASH: "application/dash+xml"}
+
+# How long a listing may spend fetching details before it shows without the rest.
+DETAILS_BUDGET = 10.0
 
 DirectoryItem = Tuple[str, xbmcgui.ListItem, bool]
 K = TypeVar("K")
@@ -294,15 +298,22 @@ class Addon:
             xbmcplugin.endOfDirectory(self._handle, succeeded=False)
 
 
-def _fetch_some(fetch: Callable[[K], V], keys: Iterable[K]) -> Dict[K, V]:
-    """Fetch per-item details for a listing, stopping at the first failure.
+def _fetch_some(
+    fetch: Callable[[K], V], keys: Iterable[K], clock: Callable[[], float] = time.monotonic
+) -> Dict[K, V]:
+    """Fetch per-item details for a listing, stopping at the first failure or after DETAILS_BUDGET.
 
     Details are extras: a listing must still show without them, and if the site
     is failing or throttling us, more requests would only make it worse.
+    Kodi shows a busy spinner meanwhile, so the budget bounds that wait.
     The client caches details, so only the first visit costs requests.
     """
     details = {}
+    deadline = clock() + DETAILS_BUDGET
     for key in keys:
+        if clock() >= deadline:
+            log.warning("Details took over %ss; skipping the rest", DETAILS_BUDGET)
+            break
         try:
             details[key] = fetch(key)
         except RtpPlayError as error:
