@@ -4,7 +4,7 @@ import pytest
 
 from plugin.routing import Request, build_url, parse_argv
 from plugin.views import Addon
-from rtpplay import Category, Channel, Episode, Page, Program, Stream
+from rtpplay import Category, Channel, Episode, Page, Program, Season, Stream
 from rtpplay.errors import NetworkError, RateLimitedError
 from rtpplay.models import HLS, PROGRESSIVE, RADIO, TV
 
@@ -13,9 +13,10 @@ HEADERS = {"User-Agent": "UA", "Referer": "https://www.rtp.pt/play/"}
 
 
 class FakeClient:
-    def __init__(self, error=None):
+    def __init__(self, error=None, seasons=()):
         self.error = error
         self.calls = []
+        self._seasons = list(seasons)
 
     def _call(self, name, *args):
         self.calls.append((name,) + args)
@@ -36,6 +37,10 @@ class FakeClient:
     def programs(self, category_id, page):
         self._call("programs", category_id, page)
         return Page([Program(1525, "A Mosca", "https://img/p.jpg")], page, has_more=True)
+
+    def seasons(self, program_id):
+        self._call("seasons", program_id)
+        return self._seasons
 
     def episodes(self, program_id, page):
         self._call("episodes", program_id, page)
@@ -105,9 +110,28 @@ def test_programs_adds_next_page_when_there_is_more(kodi):
     client = FakeClient()
     run(client, action="programs", category=9, page=2)
     assert client.calls == [("programs", 9, 2)]
-    assert params_of(kodi.items[0][0]) == {"action": "episodes", "program": "1525"}
+    assert params_of(kodi.items[0][0]) == {"action": "seasons", "program": "1525"}
     assert params_of(kodi.items[-1][0]) == {"action": "programs", "category": "9", "page": "3"}
     assert kodi.content == "tvshows"
+
+
+def test_seasons_list_each_season_as_a_folder(kodi):
+    client = FakeClient(seasons=[Season(10209, "Temporada 2", 2), Season(1, "Especial")])
+    run(client, action="seasons", program=10209)
+    assert client.calls == [("seasons", 10209)]
+    assert [item.label for _, item, _ in kodi.items] == ["Season 2", "Especial"]
+    assert params_of(kodi.items[0][0]) == {"action": "episodes", "program": "10209"}
+    assert all(folder for _, _, folder in kodi.items)
+    assert kodi.content == "seasons"
+
+
+@pytest.mark.parametrize("seasons, listed", [([], 1525), ([Season(1600, "Temporada 1", 1)], 1600)])
+def test_single_season_programs_go_straight_to_episodes(kodi, seasons, listed):
+    client = FakeClient(seasons=seasons)
+    run(client, action="seasons", program=1525)
+    assert client.calls == [("seasons", 1525), ("episodes", listed, 1)]
+    assert params_of(kodi.items[0][0])["action"] == "play_episode"
+    assert kodi.content == "episodes"
 
 
 def test_episodes_without_more_pages_has_no_next_item(kodi):

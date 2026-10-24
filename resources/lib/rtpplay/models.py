@@ -41,6 +41,15 @@ class Program:
 
 
 @dataclass(frozen=True)
+class Season:
+    """One season of a show. On RTP Play each season is a program of its own."""
+
+    program_id: int
+    title: str  # as shown on the site, e.g. "Temporada 2"
+    number: Optional[int] = None
+
+
+@dataclass(frozen=True)
 class Episode:
     program_id: int
     id: int

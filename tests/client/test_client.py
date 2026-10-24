@@ -3,6 +3,7 @@ import pytest
 from conftest import FakeResponse, FakeSession, load_fixture
 from rtpplay import HttpClient, RateLimiter, RtpPlayClient
 from rtpplay.client import CATEGORIES
+from rtpplay.models import HLS
 
 
 def make_client(*responses):
@@ -46,6 +47,13 @@ def test_episodes_request():
     assert session.requests[0]["params"] == {"listProgram": 1525, "type": "all", "page": 1}
 
 
+def test_seasons_fetch_the_program_page():
+    client, session = make_client(FakeResponse(200, load_fixture("program_seasons.html")))
+    seasons = client.seasons(10209)
+    assert session.requests[0]["url"] == "https://www.rtp.pt/play/p10209/"
+    assert [s.program_id for s in seasons] == [10209, 5057]
+
+
 def test_search_strips_the_query():
     client, session = make_client(FakeResponse(200, load_fixture("search.html")))
     client.search("  telejornal ")
@@ -73,6 +81,13 @@ def test_episode_stream_fetches_the_episode_page():
     stream = client.episode_stream("/play/p1525/e892592/a-mosca")
     assert session.requests[0]["url"] == "https://www.rtp.pt/play/p1525/e892592/a-mosca"
     assert stream.headers["Referer"] == "https://www.rtp.pt/play/"
+
+
+def test_fiction_episode_stream_is_hls():
+    client, _ = make_client(FakeResponse(200, load_fixture("episode_fiction.html")))
+    stream = client.episode_stream("/play/p10209/e763432/3-mulheres-pos-revolucao")
+    assert stream.protocol == HLS
+    assert stream.url.startswith("https://streaming-vod.rtp.pt/hls/")
 
 
 def test_episode_stream_rejects_foreign_urls():

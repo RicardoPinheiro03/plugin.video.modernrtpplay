@@ -15,7 +15,7 @@ from typing import List, Optional
 from urllib.parse import unquote
 
 from .errors import ParseError
-from .models import DASH, HLS, PROGRESSIVE, RADIO, TV, Channel, Episode, Program, Stream
+from .models import DASH, HLS, PROGRESSIVE, RADIO, TV, Channel, Episode, Program, Season, Stream
 
 _ARTICLE = re.compile(r"<article\b.*?</article>", re.S)
 _EPISODE_LINK = re.compile(
@@ -26,6 +26,11 @@ _IMG = re.compile(r'<img\b[^>]*\bsrc="([^"]+)"')
 _EPISODE_TITLE = re.compile(r'<(?:p|h4) class="episode-title">(.*?)</(?:p|h4)>', re.S)
 _EPISODE_LEAD = re.compile(r'<span class="episode-lead">(.*?)</span>', re.S)
 _EPISODE_DATE = re.compile(r'<(?:div|span) class="episode-date">(.*?)</(?:div|span)>', re.S)
+_EPISODE_NUMBER = re.compile(r'<div class="episode">(.*?)</div>', re.S)
+
+_SEASON_SELECT = re.compile(r'class="[^"]*\bseasons-container\b.*?<select\b.*?</select>', re.S)
+_SEASON_OPTION = re.compile(r'<option value="/play/p(\d+)/[^"]*"[^>]*>(.*?)</option>', re.S)
+_SEASON_NUMBER = re.compile(r"Temporada (\d+)", re.I)
 
 _CHANNEL = re.compile(
     r'<span id="(?P<kind>tv|radio)-\d+"[^>]*>\s*'
@@ -70,21 +75,45 @@ def parse_episodes(fragment: str) -> List[Episode]:
         link = _EPISODE_LINK.search(article)
         if not link:
             continue
-        # Search results split the title into program name and episode lead;
-        # elsewhere the link title already reads "Program - Episode".
+        # Series number their episodes ("Ep. 1"), and their link title is often
+        # just the program name. Search results split the title into program
+        # name and episode lead; elsewhere the link title reads "Program - Episode".
+        number = _first(_EPISODE_NUMBER, article)
         lead = _first(_EPISODE_LEAD, article)
         title = _first(_EPISODE_TITLE, article)
+        if number and not lead:
+            label = "{} - {}".format(number, title) if title else number
+        else:
+            label = _join_title(title, lead) or _strip_prefix(link.group("title"))
         episodes.append(
             Episode(
                 program_id=int(link.group("program")),
                 id=int(link.group("episode")),
-                title=_join_title(title, lead) or _strip_prefix(link.group("title")),
+                title=label,
                 path=link.group("path"),
                 thumbnail=_first(_IMG, article),
                 date=_first(_EPISODE_DATE, article),
             )
         )
     return episodes
+
+
+def parse_seasons(page: str) -> List[Season]:
+    """Parse the season selector of a program page (``/play/p<id>/``).
+
+    Each season is a separate program. Programs with a single season have no
+    selector, so this returns ``[]`` for them.
+    """
+    # The page repeats the selector (one per layout); the first one is enough.
+    select = _SEASON_SELECT.search(page)
+    if not select:
+        return []
+    seasons = []
+    for program_id, label in _SEASON_OPTION.findall(select.group(0)):
+        title = _clean_text(label)
+        number = _SEASON_NUMBER.fullmatch(title)
+        seasons.append(Season(int(program_id), title, int(number.group(1)) if number else None))
+    return seasons
 
 
 def parse_live_channels(page: str) -> List[Channel]:
@@ -120,7 +149,8 @@ def parse_episode_stream(page: str) -> Stream:
 
     Pages contain several player configurations (older ones are commented
     out); the active one is the last. URLs are often obfuscated as
-    ``atob(decodeURIComponent([...].join("")))``.
+    ``atob(decodeURIComponent([...].join("")))``. DRM-flagged pages (most
+    fiction) name their HLS URL ``fps`` (FairPlay) instead of ``hls``.
     """
     candidates = _PLAYER_FILE.findall(page)
     if not candidates:
@@ -133,7 +163,7 @@ def parse_episode_stream(page: str) -> Stream:
             return Stream(url=url, protocol=_protocol_of(url))
     else:
         urls = dict(_KEY_VALUE.findall(source))
-        for key, protocol in ((HLS, HLS), (DASH, DASH)):
+        for key, protocol in ((HLS, HLS), ("fps", HLS), (DASH, DASH)):
             url = _clean_media_url(urls.get(key, ""))
             if url:
                 return Stream(url=url, protocol=protocol)
