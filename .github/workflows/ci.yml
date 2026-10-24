@@ -19,7 +19,48 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Pull requests that touch nothing in the add-on, its packaging or CI (docs, the
+  # changelog) skip the full pipeline and only run `site`. Pushes to main, manual
+  # runs and releases always run everything.
+  changes:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: filter
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          changed=$(git diff --name-only "$BASE"...HEAD)
+          echo "$changed"
+          pattern='^(resources/|main\.py$|addon\.xml$|repository\.modernrtpplay/|scripts/|tests/|pyproject\.toml$|requirements[^/]*\.txt$|\.github/workflows/)'
+          if echo "$changed" | grep -qE "$pattern"; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Builds the GitHub Pages site and checks it is what Kodi expects. Needs only the
+  # standard library, so it runs on every change in seconds.
+  site:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/build_zip.py --output dist
+      - run: python3 scripts/build_repo.py --output site dist/*.zip
+
   lint:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -41,6 +82,8 @@ jobs:
           fi
 
   test:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     strategy:
@@ -60,6 +103,8 @@ jobs:
   # Kodi 20 ships Python 3.8 on Windows and Android, and ruff's target-version
   # does not catch newer stdlib APIs, so run the suite on a real 3.8.
   test-py38:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     steps:
