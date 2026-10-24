@@ -21,7 +21,7 @@ warn_redundant_casts = true
 
 [[tool.mypy.overrides]]
 # Kodi's modules only exist inside Kodi.
-module = ["xbmc", "xbmcaddon", "xbmcgui", "xbmcplugin"]
+module = ["xbmc", "xbmcaddon", "xbmcgui", "xbmcplugin", "xbmcvfs"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

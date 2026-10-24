@@ -3,15 +3,25 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, TypeVar
 from urllib.parse import quote, urlencode
 
 import xbmcaddon
 import xbmcgui
 import xbmcplugin
 
-from rtpplay import Episode, Page, RateLimitedError, RtpPlayClient, RtpPlayError, Stream
-from rtpplay.models import DASH, HLS, RADIO
+from rtpplay import (
+    Episode,
+    NotFoundError,
+    Page,
+    Program,
+    ProgramInfo,
+    RateLimitedError,
+    RtpPlayClient,
+    RtpPlayError,
+    Stream,
+)
+from rtpplay.models import DASH, HLS, MOVIES, RADIO, SHOWS
 
 from .routing import Request, build_url
 
@@ -26,11 +36,15 @@ RATE_LIMITED = 30005
 LOAD_FAILED = 30006
 SEARCH_HEADING = 30007
 SEASON = 30008
+TV_SHOWS = 30009
+MOVIES_LABEL = 30010
 
 ISA = "inputstream.adaptive"
 MIME_TYPES = {HLS: "application/vnd.apple.mpegurl", DASH: "application/dash+xml"}
 
 DirectoryItem = Tuple[str, xbmcgui.ListItem, bool]
+K = TypeVar("K")
+V = TypeVar("V")
 
 
 class Addon:
@@ -46,12 +60,15 @@ class Addon:
             "root": self.root,
             "live": self.live,
             "categories": self.categories,
+            "collections": lambda: self.collections(params["kind"]),
+            "collection": lambda: self.collection(params["slug"], _page(params)),
             "programs": lambda: self.programs(int(params["category"]), _page(params)),
             "seasons": lambda: self.seasons(int(params["program"])),
             "episodes": lambda: self.episodes(int(params["program"]), _page(params)),
             "search": lambda: self.search(params.get("query"), _page(params)),
             "play_live": lambda: self.play_live(params["channel"]),
             "play_episode": lambda: self.play_episode(params["path"]),
+            "play_program": lambda: self.play_program(int(params["program"])),
         }
         action = params.get("action", "root")
         if action not in actions:
@@ -72,6 +89,8 @@ class Addon:
     def root(self) -> None:
         self._directory(
             [
+                self._folder(self._string(TV_SHOWS), "collections", kind=SHOWS),
+                self._folder(self._string(MOVIES_LABEL), "collections", kind=MOVIES),
                 self._folder(self._string(PROGRAMS), "categories"),
                 self._folder(self._string(SEARCH), "search"),
             ]
@@ -93,6 +112,32 @@ class Addon:
         self._directory(
             [self._folder(c.name, "programs", category=c.id) for c in self._client.categories()]
         )
+
+    def collections(self, kind: str) -> None:
+        self._directory(
+            [
+                self._folder(c.name, "collection", slug=c.slug)
+                for c in self._client.collections(kind)
+            ]
+        )
+
+    def collection(self, slug: str, page: int) -> None:
+        result = self._client.collection(slug, page)
+        movies = any(c.slug == slug for c in self._client.collections(MOVIES))
+        infos = _fetch_some(self._client.program_info, (p.id for p in result.items))
+        items = []
+        for program in result.items:
+            if movies:
+                item = self._playable(program.title, program.thumbnail)
+                entry = (self._url("play_program", program=program.id), item, False)
+            else:
+                entry = self._folder(
+                    program.title, "seasons", program.thumbnail, program=program.id
+                )
+            _describe(entry[1], "movie" if movies else "tvshow", program, infos.get(program.id))
+            items.append(entry)
+        content = "movies" if movies else "tvshows"
+        self._directory(self._with_next(items, result, "collection", slug=slug), content)
 
     def programs(self, category_id: int, page: int) -> None:
         result = self._client.programs(category_id, page)
@@ -118,10 +163,8 @@ class Addon:
 
     def episodes(self, program_id: int, page: int) -> None:
         result = self._client.episodes(program_id, page)
-        self._directory(
-            self._with_next(self._episode_items(result), result, "episodes", program=program_id),
-            "episodes",
-        )
+        items = self._episode_items(result, details=True)
+        self._directory(self._with_next(items, result, "episodes", program=program_id), "episodes")
 
     def search(self, query: Optional[str], page: int) -> None:
         if not query:
@@ -144,6 +187,13 @@ class Addon:
     def play_episode(self, path: str) -> None:
         self._resolve(self._client.episode_stream(path))
 
+    def play_program(self, program_id: int) -> None:
+        """Play a film: a program whose page has a single episode."""
+        info = self._client.program_info(program_id)
+        if not info.episode_path:
+            raise NotFoundError("Program {} has no episode to play".format(program_id))
+        self._resolve(self._client.episode_stream(info.episode_path))
+
     def _resolve(self, stream: Stream) -> None:
         # %20 rather than "+" for spaces: Kodi and InputStream Adaptive decode headers
         # with their own URL decoders, and only %-escapes are unambiguous to all of them.
@@ -159,10 +209,22 @@ class Addon:
 
     # --- Helpers ----------------------------------------------------------
 
-    def _episode_items(self, page: Page[Episode]) -> List[DirectoryItem]:
+    def _episode_items(self, page: Page[Episode], details: bool = False) -> List[DirectoryItem]:
+        infos = (
+            _fetch_some(self._client.episode_info, (e.path for e in page.items)) if details else {}
+        )
         items = []
         for episode in page.items:
-            item = self._playable(episode.title, episode.thumbnail, plot=episode.date)
+            info = infos.get(episode.path)
+            plot = info.plot if info and info.plot else episode.date
+            item = self._playable(
+                episode.title, episode.thumbnail or (info.image if info else None), plot
+            )
+            if info:
+                tag = item.getVideoInfoTag()
+                tag.setMediaType("episode")
+                if info.duration:
+                    tag.setDuration(info.duration)
             items.append((self._url("play_episode", path=episode.path), item, False))
         return items
 
@@ -230,6 +292,41 @@ class Addon:
             xbmcplugin.setResolvedUrl(self._handle, False, xbmcgui.ListItem(offscreen=True))
         else:
             xbmcplugin.endOfDirectory(self._handle, succeeded=False)
+
+
+def _fetch_some(fetch: Callable[[K], V], keys: Iterable[K]) -> Dict[K, V]:
+    """Fetch per-item details for a listing, stopping at the first failure.
+
+    Details are extras: a listing must still show without them, and if the site
+    is failing or throttling us, more requests would only make it worse.
+    The client caches details, so only the first visit costs requests.
+    """
+    details = {}
+    for key in keys:
+        try:
+            details[key] = fetch(key)
+        except RtpPlayError as error:
+            log.warning("Skipping the remaining details: %s", error)
+            break
+    return details
+
+
+def _describe(
+    item: xbmcgui.ListItem, media_type: str, program: Program, info: Optional[ProgramInfo]
+) -> None:
+    """Add a program's details and artwork to its list item."""
+    tag = item.getVideoInfoTag()
+    tag.setMediaType(media_type)
+    tag.setTitle(program.title)
+    if program.thumbnail:
+        item.setArt({"poster": program.thumbnail})
+    if info:
+        if info.plot:
+            tag.setPlot(info.plot)
+        if info.year:
+            tag.setYear(info.year)
+        if info.image:
+            item.setArt({"fanart": info.image})
 
 
 def _page(params: Dict[str, str]) -> int:

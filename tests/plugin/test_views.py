@@ -4,17 +4,29 @@ import pytest
 
 from plugin.routing import Request, build_url, parse_argv
 from plugin.views import Addon
-from rtpplay import Category, Channel, Episode, Page, Program, Season, Stream
+from rtpplay import (
+    Category,
+    Channel,
+    Collection,
+    Episode,
+    EpisodeInfo,
+    Page,
+    Program,
+    ProgramInfo,
+    Season,
+    Stream,
+)
 from rtpplay.errors import NetworkError, RateLimitedError
-from rtpplay.models import HLS, PROGRESSIVE, RADIO, TV
+from rtpplay.models import HLS, MOVIES, PROGRESSIVE, RADIO, SHOWS, TV
 
 BASE = "plugin://plugin.video.modernrtpplay/"
 HEADERS = {"User-Agent": "UA", "Referer": "https://www.rtp.pt/play/"}
 
 
 class FakeClient:
-    def __init__(self, error=None, seasons=()):
+    def __init__(self, error=None, seasons=(), details_error=None):
         self.error = error
+        self.details_error = details_error
         self.calls = []
         self._seasons = list(seasons)
 
@@ -33,6 +45,32 @@ class FakeClient:
             Channel("rtp1", "RTP1", TV, "https://img/rtp1.png", "Telejornal"),
             Channel("antena1", "Antena 1", RADIO),
         ]
+
+    def collections(self, kind):
+        self._call("collections", kind)
+        return {
+            SHOWS: [Collection("series-nacionais", "Séries Nacionais", SHOWS)],
+            MOVIES: [Collection("filmes", "Cinema Internacional", MOVIES)],
+        }[kind]
+
+    def collection(self, slug, page):
+        self._call("collection", slug, page)
+        programs = [Program(17296, "Beleza Colateral", "https://img/poster.jpg"), Program(2, "B")]
+        return Page(programs, page, has_more=True)
+
+    def program_info(self, program_id):
+        self._call("program_info", program_id)
+        if self.details_error:
+            raise self.details_error
+        return ProgramInfo(
+            program_id, "Howard...", "https://img/fanart.jpg", 2016, [], "/play/p17296/e961379/x"
+        )
+
+    def episode_info(self, path):
+        self._call("episode_info", path)
+        if self.details_error:
+            raise self.details_error
+        return EpisodeInfo("1941. Cândido...", 2706, "https://img/show.jpg")
 
     def programs(self, category_id, page):
         self._call("programs", category_id, page)
@@ -80,7 +118,12 @@ def test_parse_argv_without_query():
 
 def test_root_menu(kodi):
     run(FakeClient())
-    assert [params_of(url)["action"] for url, _, _ in kodi.items] == ["categories", "search"]
+    assert [params_of(url) for url, _, _ in kodi.items] == [
+        {"action": "collections", "kind": "shows"},
+        {"action": "collections", "kind": "movies"},
+        {"action": "categories"},
+        {"action": "search"},
+    ]
     assert all(is_folder for _, _, is_folder in kodi.items)
     assert kodi.end["succeeded"]
 
@@ -125,7 +168,7 @@ def test_seasons_list_each_season_as_a_folder(kodi):
 def test_single_season_programs_go_straight_to_episodes(kodi, seasons, listed):
     client = FakeClient(seasons=seasons)
     run(client, action="seasons", program=1525)
-    assert client.calls == [("seasons", 1525), ("episodes", listed, 1)]
+    assert client.calls[:2] == [("seasons", 1525), ("episodes", listed, 1)]
     assert params_of(kodi.items[0][0])["action"] == "play_episode"
     assert kodi.content == "episodes"
 
@@ -136,6 +179,89 @@ def test_episodes_without_more_pages_has_no_next_item(kodi):
     url, item, folder = kodi.items[0]
     assert params_of(url) == {"action": "play_episode", "path": "/play/p1525/e892592/a-mosca"}
     assert item.video_tag.title == "A Mosca - Pausa"
+
+
+def test_episodes_show_their_synopsis_and_duration(kodi):
+    client = FakeClient()
+    run(client, action="episodes", program=1525)
+    assert ("episode_info", "/play/p1525/e892592/a-mosca") in client.calls
+    tag = kodi.items[0][1].video_tag
+    assert (tag.plot, tag.duration, tag.media_type) == ("1941. Cândido...", 2706, "episode")
+
+
+def test_episodes_still_list_when_details_fail(kodi):
+    run(FakeClient(details_error=RateLimitedError("slow down")), action="episodes", program=1)
+    assert kodi.end["succeeded"]
+    assert kodi.items[0][1].video_tag.plot is None  # the fake episode has no date either
+    assert kodi.notifications == []
+
+
+def test_search_does_not_fetch_episode_details(kodi):
+    client = FakeClient()
+    client.search = lambda query, page: client.episodes(1, page)
+    run(client, action="search", query="x")
+    assert not any(call[0] == "episode_info" for call in client.calls)
+
+
+@pytest.mark.parametrize(
+    "kind, label", [("shows", "Séries Nacionais"), ("movies", "Cinema Internacional")]
+)
+def test_collections_list_one_folder_per_collection(kodi, kind, label):
+    run(FakeClient(), action="collections", kind=kind)
+    ((url, item, folder),) = kodi.items
+    assert item.label == label and folder
+    assert params_of(url)["action"] == "collection"
+
+
+def test_movie_collection_lists_playable_films_with_details(kodi):
+    client = FakeClient()
+    run(client, action="collection", slug="filmes")
+    url, item, folder = kodi.items[0]
+    assert params_of(url) == {"action": "play_program", "program": "17296"}
+    assert not folder and item.properties["IsPlayable"] == "true"
+    tag = item.video_tag
+    assert (tag.title, tag.plot, tag.year, tag.media_type) == (
+        "Beleza Colateral",
+        "Howard...",
+        2016,
+        "movie",
+    )
+    assert item.art["poster"] == "https://img/poster.jpg"
+    assert item.art["fanart"] == "https://img/fanart.jpg"
+    assert params_of(kodi.items[-1][0]) == {"action": "collection", "slug": "filmes", "page": "2"}
+    assert kodi.content == "movies"
+
+
+def test_show_collection_lists_shows_that_open_their_seasons(kodi):
+    run(FakeClient(), action="collection", slug="series-nacionais")
+    url, item, folder = kodi.items[0]
+    assert params_of(url) == {"action": "seasons", "program": "17296"}
+    assert folder
+    assert item.video_tag.media_type == "tvshow"
+    assert kodi.content == "tvshows"
+
+
+def test_collection_stops_fetching_details_after_a_failure(kodi):
+    client = FakeClient(details_error=NetworkError("down"))
+    run(client, action="collection", slug="filmes")
+    assert [c for c in client.calls if c[0] == "program_info"] == [("program_info", 17296)]
+    assert len(kodi.items) == 3  # two films and the next page
+    assert kodi.items[0][1].video_tag.plot is None
+
+
+def test_play_program_plays_its_episode(kodi):
+    client = FakeClient()
+    run(client, action="play_program", program=17296)
+    assert ("episode_stream", "/play/p17296/e961379/x") in client.calls
+    assert kodi.resolved[0] is True
+
+
+def test_play_program_without_episode_fails_cleanly(kodi):
+    client = FakeClient()
+    client.program_info = lambda program_id: ProgramInfo(program_id)
+    run(client, action="play_program", program=1)
+    assert kodi.resolved[0] is False
+    assert kodi.notifications == [("RTP Play", "Load failed")]
 
 
 def test_search_prompts_for_a_query(kodi):
@@ -237,4 +363,4 @@ def test_stream_headers_encode_spaces_as_percent_20(kodi):
 def test_page_is_clamped_to_one(kodi, page, expected):
     client = FakeClient()
     run(client, action="episodes", program=1, page=page)
-    assert client.calls == [("episodes", 1, expected)]
+    assert client.calls[0] == ("episodes", 1, expected)

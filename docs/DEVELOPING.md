@@ -12,6 +12,9 @@ RTP has no public API. The mobile-app API used by the old `plugin.video.rtpplay`
 | Seasons of a program | `/play/p<id>/` (program page): the season `<select>`, whose options link to `/play/p<season id>/<slug>`. Each season is a program of its own; single-season programs have no selector |
 | Episodes of a program | `/play/bg_l_ep/?listProgram=<id>&page=<n>` (HTML fragment) |
 | Search | `/play/bg_l_s/?listQuery=<q>&page=<n>` (HTML fragment) |
+| TV shows and films | `/play/colecao/<slug>` (collection page with every program; slugs in `COLLECTIONS`) |
+| Program details | Program page: synopsis in `<h2 class="lead">` (or the JSON-LD `description`), year in the technical sheet, artwork in `og:image` |
+| Episode details | Episode page: the JSON-LD `VideoObject` (`description`, `duration`) |
 | Episode stream | Episode page: the **last** `var f = {...}` / `file: {...}` player config, with URLs often obfuscated as `atob(decodeURIComponent([...].join("")))`. The HLS URL is keyed `hls`, or `fps` on DRM-flagged pages |
 
 The streaming CDN only serves media to requests that carry a browser `User-Agent`, `Referer` and `Origin`. The client attaches these to every `Stream` it returns.
@@ -25,6 +28,7 @@ scripts/                    build_zip.py (add-on zip), build_repo.py (Pages site
 resources/lib/
 ├── rtpplay/                Website client. Pure Python, no Kodi imports.
 │   ├── client.py           RtpPlayClient: the only API the UI uses
+│   ├── cache.py            Cache: SQLite key-value store with expiry, shared across navigations
 │   ├── http.py             HttpClient: rate limiter, retries, browser headers
 │   ├── parsers.py          HTML → models. The only code that knows the markup.
 │   ├── models.py           Frozen dataclasses: Category, Channel, Program, Episode, Stream, Page
@@ -56,6 +60,8 @@ RTP Play is a public website, so the client is deliberately conservative (`rtppl
 - **Total wait budget:** all waits of one request together stay within 30s (`RetryPolicy.max_total_wait`). The client gives up rather than start a wait that would exceed it.
 - **No retries for client errors:** 404 raises `NotFoundError`; other unexpected statuses raise immediately.
 - **Few requests by design:** categories are a static table (zero requests), and each screen costs one request (opening a single-season show costs two: its program page, then its episodes).
+- **Details are cached and best-effort:** synopses need one request per program or episode, so a TV show, film or episode list fetches at most one page's worth (12) of them, spaced by the token bucket, and stores them in `cache.db` (`rtpplay/cache.py`). Revisits cost nothing until they expire. If one detail request fails, the list shows without the rest instead of sending more.
+- **Artwork is cached by Kodi:** the add-on only passes image URLs; Kodi's texture cache downloads each image once and serves it from disk afterwards. The URLs are stable (and cached in `cache.db`), so revisits hit that cache too.
 
 Kodi starts a fresh Python process for every navigation, so the token bucket only spans a single action. That is fine because each action makes a single request (plus at most 3 retries), and the total wait budget bounds how long one action can take. If a feature ever needs many requests per action, the bucket already spaces them out.
 

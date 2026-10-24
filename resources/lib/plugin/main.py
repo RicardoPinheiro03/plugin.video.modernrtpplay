@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 import logging
+import os
+import sqlite3
 from typing import List
 
 import xbmc
+import xbmcaddon
+import xbmcvfs
 
-from rtpplay import RtpPlayClient
+from rtpplay import Cache, RtpPlayClient
 
 from .routing import parse_argv
 from .views import Addon
@@ -33,4 +37,19 @@ def run(argv: List[str]) -> None:
     if not any(isinstance(h, KodiLogHandler) for h in root.handlers):
         root.addHandler(KodiLogHandler())
         root.setLevel(logging.DEBUG)
-    Addon(RtpPlayClient(), parse_argv(argv)).dispatch()
+    cache = _open_cache()
+    try:
+        Addon(RtpPlayClient(cache=cache), parse_argv(argv)).dispatch()
+    finally:
+        cache.close()
+
+
+def _open_cache() -> Cache:
+    """The cache file in the add-on's profile folder, or an in-memory one if it is unusable."""
+    profile = xbmcvfs.translatePath(xbmcaddon.Addon().getAddonInfo("profile"))
+    try:
+        os.makedirs(profile, exist_ok=True)
+        return Cache(os.path.join(profile, "cache.db"))
+    except (OSError, sqlite3.Error) as error:
+        logging.getLogger(__name__).warning("Cache file unusable, not persisting: %s", error)
+        return Cache()

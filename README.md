@@ -15,6 +15,7 @@ Kodi keeps the add-on updated from then on. Other ways to install are in [docs/I
 
 ## Features
 
+- Browse TV shows by season and movies, with synopses, posters and fan art
 - Browse every on-demand program by category (news, fiction, sports, kids and more)
 - Shows with several seasons list their seasons first, then the episodes
 - Search the RTP Play catalogue
