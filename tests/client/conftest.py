@@ -19,6 +19,10 @@ class FakeResponse:
         self.status_code = status_code
         self.text = text
         self.headers = CaseInsensitiveDict(headers or {})
+        self.closed = False
+
+    def close(self):
+        self.closed = True
 
 
 class FakeSession:
@@ -28,8 +32,10 @@ class FakeSession:
         self.responses = list(responses)
         self.requests = []
 
-    def get(self, url, params=None, headers=None, timeout=None):
-        self.requests.append({"url": url, "params": params, "headers": headers})
+    def get(self, url, params=None, headers=None, timeout=None, stream=False):
+        self.requests.append(
+            {"url": url, "params": params, "headers": headers, "timeout": timeout, "stream": stream}
+        )
         result = self.responses.pop(0)
         if isinstance(result, Exception):
             raise result

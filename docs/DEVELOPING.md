@@ -4,7 +4,7 @@
 
 RTP has no public API. The mobile-app API used by the old `plugin.video.rtpplay` now answers every third-party request with `Request not authorized`, so this add-on reads the same pages a browser does:
 
-| Data | Source on www.rtp.pt |
+| Data | Source on www.rtp.pt unless noted |
 | --- | --- |
 | Live channels | `/play/direto` (channel cards) |
 | Live stream | `/play/direto/<slug>` (`hls_url = "..."` in the page script, carries a short-lived token) |
@@ -16,6 +16,7 @@ RTP has no public API. The mobile-app API used by the old `plugin.video.rtpplay`
 | Program details | Program page: synopsis in `<h2 class="lead">` (or the JSON-LD `description`), year in the technical sheet, artwork in `og:image` |
 | Episode details | Episode page: the JSON-LD `VideoObject` (`description`, `duration`) |
 | Episode stream | Episode page: the **last** `var f = {...}` / `file: {...}` player config, with URLs often obfuscated as `atob(decodeURIComponent([...].join("")))`. The HLS URL is keyed `hls`, or `fps` on DRM-flagged pages |
+| Episode stream in 1080p | `<name>_hi.mp4` on `streaming-vod.rtp.pt`. The stream's urlset (`...,<name>_lo.mp4,<name>.mp4,.urlset/master.m3u8`: 576p and 720p) leaves it out, so the client adds it if the CDN answers 200 for the extended manifest |
 
 The streaming CDN only serves media to requests that carry a browser `User-Agent`, `Referer` and `Origin`. The client attaches these to every `Stream` it returns.
 
@@ -55,11 +56,11 @@ Design rules:
 RTP Play is a public website, so the client is deliberately conservative (`rtpplay/http.py`):
 
 - **Client-side budget:** `RateLimiter` is a token bucket, by default a burst of 4 requests and then 2 per second. Every request goes through it.
-- **Server pushback:** HTTP 429, 502, 503, 504, connection errors and timeouts are retried up to 3 times. Each wait is exponential backoff (`1s, 2s, 4s…`, capped at 30s) with full jitter. Other `requests` errors fail at once as `NetworkError`.
+- **Server pushback:** HTTP 429, 502, 503, 504, connection errors and timeouts are retried up to 3 times. Each wait is exponential backoff (`1s, 2s, 4s…`, capped at 30s) with full jitter. Other `requests` errors fail at once as `NetworkError`. The 1080p check before an episode plays (`HttpClient.exists`) is the exception: exactly one try with a 5s timeout, because any failure just plays the site's stream, and backing off would only delay playback.
 - **`Retry-After`:** when the server sends it (seconds or an HTTP date), it replaces the computed delay. If it asks for more than 30s, the client gives up at once with `RateLimitedError(retry_after=…)` instead of freezing Kodi's UI. The add-on then shows "Try again in N seconds".
 - **Total wait budget:** all waits of one request together stay within 30s (`RetryPolicy.max_total_wait`). The client gives up rather than start a wait that would exceed it.
 - **No retries for client errors:** 404 raises `NotFoundError`; other unexpected statuses raise immediately.
-- **Few requests by design:** categories and collections are static tables (zero requests), and each list costs one request (opening a single-season show costs two: its program page, then its episodes). The exception is details, below.
+- **Few requests by design:** categories and collections are static tables (zero requests), and each list costs one request (opening a single-season show costs two: its program page, then its episodes). Playing an episode also costs two: its page, then the 1080p check. The exception is details, below.
 - **Details are cached and best-effort:** synopses only exist on each program or episode page, one request per item. So the first visit to a TV show, film or episode list page sends up to 12 more requests (one page's worth), spaced by the token bucket: about 5 seconds. They are stored in `cache.db` (`rtpplay/cache.py`), so revisits, and favourites pointing at the same list, cost nothing until they expire. Fetching stops at the first failed request, or once the list has spent `DETAILS_BUDGET` (10s) on details, and the list shows without the rest. Search results skip details.
 - **Artwork is cached by Kodi:** the add-on only passes image URLs; Kodi's texture cache downloads each image once and serves it from disk afterwards. The URLs are stable (and cached in `cache.db`), so revisits hit that cache too.
 

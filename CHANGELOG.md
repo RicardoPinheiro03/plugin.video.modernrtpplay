@@ -9,6 +9,7 @@ All notable changes to this add-on are documented here. The format is based on [
 - *TV Shows* and *Movies* in the main menu, built from RTP Play's series and film collections. Films play straight from the list; shows open their seasons. Both show their synopsis, year, poster and fan art.
 - Episode lists show each episode's synopsis and duration.
 - A cache in the add-on's profile folder (`cache.db`), so revisiting a list costs no requests: collections for 6 hours, program details for a day, episode details for 30 days. The first visit to a list page takes a few seconds while it fetches synopses.
+- Episodes play in 1080p when RTP Play has a 1080p version (most recent series do), instead of at most 720p. Otherwise they play as before. Films are unchanged for now.
 
 ### Changed
 

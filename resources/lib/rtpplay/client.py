@@ -170,10 +170,20 @@ class RtpPlayClient:
         stream = parsers.parse_live_stream(self._http.get_text("/play/direto/" + channel_slug))
         return dataclasses.replace(stream, headers=dict(STREAM_HEADERS))
 
-    def episode_stream(self, episode_path: str) -> Stream:
-        """``episode_path`` is :attr:`Episode.path`, e.g. ``/play/p1525/e892592/a-mosca``."""
+    def episode_stream(self, episode_path: str, best_quality: bool = True) -> Stream:
+        """``episode_path`` is :attr:`Episode.path`, e.g. ``/play/p1525/e892592/a-mosca``.
+
+        With ``best_quality``, the stream includes the 1080p rendition the site
+        leaves out, if the CDN has it. Checking costs one more request.
+        """
         _check_episode_path(episode_path)
         stream = parsers.parse_episode_stream(self._http.get_text(episode_path))
+        high = parsers.with_hi_rendition(stream.url) if best_quality else None
+        if high and self._http.exists(high):
+            log.info("Playing %s with its 1080p rendition", episode_path)
+            stream = dataclasses.replace(stream, url=high)
+        elif high:
+            log.info("No 1080p rendition of %s, playing the site's stream", episode_path)
         return dataclasses.replace(stream, headers=dict(STREAM_HEADERS))
 
     def _cached(self, key: str, ttl: float, fetch: Callable[[], T], load: Callable[[Any], T]) -> T:

@@ -37,6 +37,9 @@ DEFAULT_HEADERS = {
     "Origin": BASE_URL,
 }
 
+# exists() runs while Kodi waits to start playback, so a slow answer counts as a miss.
+PROBE_TIMEOUT = 5.0
+
 RETRYABLE_STATUS = frozenset({429, 502, 503, 504})
 # A truncated chunked body is as transient as a dropped connection.
 RETRYABLE_ERRORS = (
@@ -188,6 +191,23 @@ class HttpClient:
             self._wait(delay, url, "HTTP {}".format(status))
             waited += delay
             attempt += 1
+
+    def exists(self, url: str) -> bool:
+        """Whether ``url`` answers HTTP 200. Reads no body.
+
+        One quick try without retries: callers have a fallback, and backing off
+        from a failing server would only delay playback.
+        """
+        self._limiter.acquire()
+        try:
+            response = self._session.get(
+                url, headers=DEFAULT_HEADERS, timeout=PROBE_TIMEOUT, stream=True
+            )
+        except requests.RequestException as exc:
+            log.debug("Could not reach %s: %s", url, exc)
+            return False
+        response.close()
+        return response.status_code == 200
 
     def _fits(self, waited: float, delay: float) -> bool:
         return waited + delay <= self._retry.max_total_wait

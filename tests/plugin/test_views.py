@@ -93,8 +93,8 @@ class FakeClient:
         self._call("live_stream", slug)
         return Stream("https://live/rtp1.m3u8", HLS, dict(HEADERS), is_live=True)
 
-    def episode_stream(self, path):
-        self._call("episode_stream", path)
+    def episode_stream(self, path, best_quality=True):
+        self._call("episode_stream", path, best_quality)
         return Stream("https://cdn/a.mp3", PROGRESSIVE, dict(HEADERS))
 
 
@@ -249,10 +249,10 @@ def test_collection_stops_fetching_details_after_a_failure(kodi):
     assert kodi.items[0][1].video_tag.plot is None
 
 
-def test_play_program_plays_its_episode(kodi):
+def test_play_program_plays_its_episode_without_checking_for_1080p(kodi):
     client = FakeClient()
     run(client, action="play_program", program=17296)
-    assert ("episode_stream", "/play/p17296/e961379/x") in client.calls
+    assert ("episode_stream", "/play/p17296/e961379/x", False) in client.calls
     assert kodi.resolved[0] is True
 
 
@@ -289,6 +289,12 @@ def test_play_hls_uses_inputstream_adaptive(kodi):
     assert item.properties["inputstream.adaptive.stream_headers"] == item.path.split("|", 1)[1]
     assert item.mime_type == "application/vnd.apple.mpegurl"
     assert item.content_lookup is False
+
+
+def test_play_episode_asks_for_the_best_quality(kodi):
+    client = FakeClient()
+    run(client, action="play_episode", path="/play/p1/e2/x")
+    assert client.calls == [("episode_stream", "/play/p1/e2/x", True)]
 
 
 def test_play_progressive_audio(kodi):
