@@ -4,6 +4,11 @@ All notable changes to this add-on are documented here. The format is based on [
 
 ## [Unreleased]
 
+### Added
+
+- Kodi repository (`repository.modernrtpplay`) on GitHub Pages: add one source URL in Kodi, install once, and the add-on updates automatically.
+- Release workflow: pushing a `vX.Y.Z` tag runs CI, creates a GitHub release with the zips and publishes the repository.
+
 ### Changed
 
 - InputStream Adaptive is now a required dependency, and HLS/DASH always play through it. Kodi installs it with the add-on.

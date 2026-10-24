@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<addon id="repository.modernrtpplay" name="RTP Play Repository" version="1.0.0" provider-name="RicardoPinheiro03">
+    <extension point="xbmc.addon.repository" name="RTP Play Repository">
+        <dir>
+            <info compressed="false">https://ricardopinheiro03.github.io/plugin.video.modernrtpplay/addons.xml</info>
+            <checksum>https://ricardopinheiro03.github.io/plugin.video.modernrtpplay/addons.xml.md5</checksum>
+            <datadir zip="true">https://ricardopinheiro03.github.io/plugin.video.modernrtpplay/</datadir>
+        </dir>
+    </extension>
+    <extension point="xbmc.addon.metadata">
+        <summary lang="en_GB">Installs and updates the RTP Play add-on</summary>
+        <summary lang="pt_PT">Instala e atualiza o add-on RTP Play</summary>
+        <description lang="en_GB">Repository for plugin.video.modernrtpplay. Install it once and Kodi keeps RTP Play up to date.</description>
+        <description lang="pt_PT">Repositório do plugin.video.modernrtpplay. Instale-o uma vez e o Kodi mantém o RTP Play atualizado.</description>
+        <platform>all</platform>
+        <license>GPL-3.0-only</license>
+        <source>https://github.com/RicardoPinheiro03/plugin.video.modernrtpplay</source>
+    </extension>
+</addon>

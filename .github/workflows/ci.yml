@@ -5,14 +5,17 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  # release.yml runs the same jobs before publishing.
+  workflow_call:
 
 permissions:
   contents: read
 
 # Superseded pull request runs are cancelled. Every push to main gets its own group
-# (keyed by commit), so queued main runs are never cancelled either.
+# (keyed by commit), so queued main runs are never cancelled either. The workflow
+# name keeps a release's CI run from queueing behind main's run of the same commit.
 concurrency:
-  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -91,6 +94,13 @@ jobs:
           unzip -q dist/*.zip -d check
           kodi-addon-checker --branch nexus check/*
           kodi-addon-checker --branch omega check/*
+      - name: Validate the repository add-on
+        run: |
+          python scripts/build_repo.py --output site dist/*.zip
+          mkdir -p check-repo
+          unzip -q site/repository.modernrtpplay-*.zip -d check-repo
+          kodi-addon-checker --branch nexus check-repo/*
+          kodi-addon-checker --branch omega check-repo/*
       - name: Upload zip
         uses: actions/upload-artifact@v4
         with:
