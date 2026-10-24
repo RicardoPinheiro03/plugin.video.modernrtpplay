@@ -38,7 +38,13 @@ class Cache:
             # The cache only saves requests; a broken one must not break the add-on.
             log.warning("Cache read failed: %s", error)
             return None
-        return json.loads(row[0]) if row else None
+        if not row:
+            return None
+        try:
+            return json.loads(row[0])
+        except ValueError:
+            log.warning("Ignoring a corrupt cache entry for %s", key)
+            return None
 
     def set(self, key: str, value: Any, ttl: float) -> None:
         try:

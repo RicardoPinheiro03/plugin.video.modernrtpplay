@@ -2,7 +2,7 @@ import pytest
 
 from conftest import FakeResponse, FakeSession, load_fixture
 from rtpplay import Cache, HttpClient, RateLimiter, RtpPlayClient
-from rtpplay.client import CATEGORIES, COLLECTION_TTL, COLLECTIONS
+from rtpplay.client import CACHE_VERSION, CATEGORIES, COLLECTION_TTL, COLLECTIONS
 from rtpplay.models import HLS, MOVIES, SHOWS
 
 
@@ -182,3 +182,13 @@ def test_episode_info_rejects_foreign_urls():
     with pytest.raises(ValueError):
         client.episode_info("https://evil.example/play/x")
     assert session.requests == []
+
+
+def test_cache_entries_that_no_longer_fit_the_model_are_refetched(cache):
+    client, session = make_client(FakeResponse(200, load_fixture("episode_info.html")), cache=cache)
+    path = "/play/p17133/e953860/o-espiao-que-veio-do-futebol"
+    cache.set("v{}:episode:{}".format(CACHE_VERSION, path), {"renamed": 1}, ttl=60)
+    assert client.episode_info(path).duration == 2706
+    assert len(session.requests) == 1
+    assert client.episode_info(path).duration == 2706  # and the fresh value replaced it
+    assert len(session.requests) == 1

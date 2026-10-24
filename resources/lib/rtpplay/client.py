@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import logging
 import re
 from typing import Any, Callable, List, Optional, TypeVar
 
@@ -25,6 +26,8 @@ from .models import (
 )
 
 T = TypeVar("T")
+
+log = logging.getLogger(__name__)
 
 # Category ids are what the site's list endpoints filter on. They are not
 # exposed anywhere cheap to scrape (each needs its own page fetch), and they
@@ -179,7 +182,11 @@ class RtpPlayClient:
         key = "v{}:{}".format(CACHE_VERSION, key)
         data = self._cache.get(key)
         if data is not None:
-            return load(data)
+            try:
+                return load(data)
+            # An entry that no longer fits its model is a miss, not a crash.
+            except (TypeError, KeyError, ValueError) as error:
+                log.warning("Ignoring an unreadable cache entry for %s: %s", key, error)
         value = fetch()
         self._cache.set(key, _to_json(value), ttl)
         return value

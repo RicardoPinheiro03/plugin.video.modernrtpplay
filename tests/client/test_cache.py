@@ -37,3 +37,11 @@ def test_a_broken_cache_reads_as_empty_and_ignores_writes(clock):
     cache.close()  # every query now raises sqlite3.ProgrammingError
     cache.set("k", 1, ttl=60)
     assert cache.get("k") is None
+
+
+def test_corrupt_entries_read_as_missing(clock):
+    cache = Cache(clock=clock)
+    with cache._db:
+        cache._db.execute("INSERT INTO cache VALUES ('k', '{not json', ?)", (clock() + 60,))
+    assert cache.get("k") is None
+    cache.close()
