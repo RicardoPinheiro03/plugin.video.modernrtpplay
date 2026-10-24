@@ -1,0 +1,20 @@
+    <script>
+      var x1 = decodeURIComponent(["https://cdn-ondemand.rtp.pt/nas2.share/h264/512x384/p5449/preview/p5449_1_201901231263_videoprv.mp4"].join(""));
+      
+      if ($("#player_prog").length > 0) {
+        /* 
+          var player1 = new RTPPlayer({
+            file: {hls : atob( decodeURIComponent(["aHR0cHM","6Ly9zdH","JlYW1pb","mctb25k","ZW1hbmQ","ucnRwLn","B0L25hc","zIuc2hh","cmUvaDI","2NC81MT","J4Mzg0L","3AxNTI1","L3AxNTI","1XzFfMj","AyMTA0M","jA1OTk2","L21hc3R","lcnMubT","N1OA%3D","%3D"].join(""))), dash : atob( decodeURIComponent(["aHR0cHM6Ly","9zdHJlYW1p","bmctb25kZW","1hbmQucnRw","LnB0L25hcz","Iuc2hhcmUv","aDI2NC81MT","J4Mzg0L3Ax","NTI1L3AxNT","I1XzFfMjAy","MTA0MjA1OT","k2L21hc3Rl","cnMubXBk"].join(""))) },
+            seekBarThumbnailsLoc: '//cdn-images.rtp.pt/multimedia/screenshots/p1525/preview/p1525_1_202104205996_preview.vtt',      
+          }); 
+        */
+       
+        var f = {hls : atob( decodeURIComponent(["aHR0cH","M6Ly9z","dHJlYW","1pbmct","dm9kLn","J0cC5w","dC9kcm","0tZnBz","L25hcz","Iuc2hh","cmUvaD","I2NC81","MTJ4Mz","g0L3Ax","NTI1L3","AxNTI1","XzFfMj","AyMTA1","MTA2MT","E4Lm1w","NC9tYX","N0ZXIu","bTN1OA","%3D%3D"].join(""))), dash : atob( decodeURIComponent(["aHR0cH","M6Ly9z","dHJlYW","1pbmct","dm9kLn","J0cC5w","dC9kcm","0tZGFz","aC9uYX","MyLnNo","YXJlL2","gyNjQv","NTEyeD","M4NC9w","MTUyNS","9wMTUy","NV8xXz","IwMjEw","NTEwNj","ExOC5t","cDQvbW","FuaWZl","c3QubX","Bk"].join(""))) };
+        var f = {fps : atob( decodeURIComponent(["aHR0cHM6","Ly9zdHJl","YW1pbmct","dm9kLnJ0","cC5wdC9k","cm0tZnBz","L25hczIu","c2hhcmUs","L3B0L2gy","NjQvNTEy","eDM4NC9w","MTAyMDkv","cDEwMjA5","XzFfMjAy","NDA1MDEx","NDM0MDhl","MDAxdDcw","MDVkX2xv","Lm1wNCwv","cHQvaDI2","NC81MTJ4","Mzg0L3Ax","MDIwOS9w","MTAyMDlf","MV8yMDI0","MDUwMTE0","MzQwOGUw","MDF0NzAw","NWQubXA0","LC51cmxz","ZXQvbWFz","dGVyLm0z","dTg%3D"].join(""))), dash : atob( decodeURIComponent(["aHR0cHM6L","y9zdHJlYW","1pbmctdm9","kLnJ0cC5w","dC9kcm0tZ","GFzaC9uYX","MyLnNoYXJ","lLC9wdC9o","MjY0LzUxM","ngzODQvcD","EwMjA5L3A","xMDIwOV8x","XzIwMjQwN","TAxMTQzND","A4ZTAwMXQ","3MDA1ZF9s","by5tcDQsL","3B0L2gyNj","QvNTEyeDM","4NC9wMTAy","MDkvcDEwM","jA5XzFfMj","AyNDA1MDE","xNDM0MDhl","MDAxdDcwM","DVkLm1wNC","wudXJsc2V","0L21hbmlm","ZXN0Lm1wZ","A%3D%3D"].join(""))) };
+        
+        var player1 = new RTPPlayer({
+          id: "player_prog",
+          fileKey: atob( decodeURIComponent(["L25hczIuc","2hhcmUvcH","QvaDI2NC8","1MTJ4Mzg0","L3AxMDIwO","S9wMTAyMD","lfMV8yMDI","0MDUwMTE0","MzQwOGUwM","DF0NzAwNW","QubXA0"].join(""))),
+          file: f,
+        });
+</script>

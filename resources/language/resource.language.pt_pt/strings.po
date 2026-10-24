@@ -41,3 +41,7 @@ msgstr "Não foi possível carregar conteúdos da RTP Play."
 msgctxt "#30007"
 msgid "Search RTP Play"
 msgstr "Pesquisar na RTP Play"
+
+msgctxt "#30008"
+msgid "Season %s"
+msgstr "Temporada %s"

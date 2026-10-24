@@ -41,3 +41,7 @@ msgstr ""
 msgctxt "#30007"
 msgid "Search RTP Play"
 msgstr ""
+
+msgctxt "#30008"
+msgid "Season %s"
+msgstr ""
