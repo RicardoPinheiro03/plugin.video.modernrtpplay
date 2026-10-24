@@ -20,6 +20,8 @@ The streaming CDN only serves media to requests that carry a browser `User-Agent
 
 ```
 main.py                     Kodi entry point (one process per navigation)
+repository.modernrtpplay/   Kodi repository add-on: points Kodi at the GitHub Pages site
+scripts/                    build_zip.py (add-on zip), build_repo.py (Pages site)
 resources/lib/
 ├── rtpplay/                Website client. Pure Python, no Kodi imports.
 │   ├── client.py           RtpPlayClient: the only API the UI uses
@@ -34,7 +36,7 @@ resources/lib/
 tests/
 ├── client/                 Parser tests on real-page fixtures, client and rate-limit tests
 ├── plugin/                 View tests with fake xbmc* modules and a fake client
-└── packaging/              Zip build test
+└── packaging/              Zip and repository build tests
 ```
 
 Design rules:
@@ -117,35 +119,41 @@ Category ids are a static table in `rtpplay/client.py` (`CATEGORIES`), because d
 - Python 3.8 compatible code (Kodi 20 still ships 3.8 on some platforms): use `from __future__ import annotations` and `typing.List` etc. Ruff's `target-version` only covers syntax, so CI also runs the test suite on a real Python 3.8 (`test-py38`).
 - Ruff for lint and formatting (`pyproject.toml`), 100-column lines.
 - Branches: `feat/…`, `fix/…`, `docs/…`, `ci/…`. One component or concern per pull request.
-- Commit messages: imperative subject, a body explaining *why*.
+- Commits and pull request titles follow [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<optional scope>): <imperative summary>`, then a body explaining *why*. Types: `feat` (user-visible feature), `fix` (bug fix), `docs`, `ci`, `test`, `refactor`, `chore`. Scopes name the component: `client`, `addon`, `repo`. Mark breaking changes with `!` (`feat(addon)!: …`). A pull request's title takes the type of its most significant change.
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every pull request and on pushes to `main`:
+`.github/workflows/ci.yml` runs on every pull request, on pushes to `main`, and as the first stage of a release:
 
 | Job | What it does |
 | --- | --- |
 | `lint` | `ruff check`, `ruff format --check` and `mypy`; fails if compiled Python files (`__pycache__/`, `*.pyc`) are committed |
 | `test` | `pytest` on Python 3.10 and 3.13 with warnings as errors and a 90% branch-coverage gate |
 | `test-py38` | `pytest` on Python 3.8, the oldest Python that Kodi 20 ships |
-| `build` | Runs after lint and both test jobs pass. Builds the zip, unpacks it and validates it with `kodi-addon-checker` against Nexus (Kodi 20) and Omega (Kodi 21), so it checks exactly what ships, then uploads the zip as the `addon-zip` artifact |
+| `build` | Runs after lint and both test jobs pass. Builds the zip, unpacks it and validates it with `kodi-addon-checker` against Nexus (Kodi 20) and Omega (Kodi 21), so it checks exactly what ships, then uploads the zip as the `addon-zip` artifact. Also builds the repository site and validates the repository add-on |
 
 ## Releasing
 
-Today, releases are manual:
+Releases are published by `.github/workflows/release.yml` when a `v*` tag is pushed:
 
 1. Bump `version` in `addon.xml` ([semantic versioning](https://semver.org)) and update `<news>`.
-2. Move the *Unreleased* entries in `CHANGELOG.md` under the new version and date.
-3. Merge to `main`, tag `vX.Y.Z`, and attach the CI `addon-zip` artifact to a GitHub release.
+2. Move the *Unreleased* entries in `CHANGELOG.md` under `## [X.Y.Z] - <date>`.
+3. Merge to `main`, then tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
 
-### Planned: release pipeline
+The workflow then:
 
-A second workflow (`release.yml`, triggered by pushing a `v*` tag) can automate the steps above:
+1. Checks that the tag matches `addon.xml`'s version and that `CHANGELOG.md` has a section for it.
+2. Runs the whole CI workflow (lint, tests, zip build, `kodi-addon-checker`).
+3. Builds the Kodi repository from the CI zip (`scripts/build_repo.py`) and creates a GitHub release with the add-on zip, the repository zip and the changelog section as notes.
+4. Deploys the repository to GitHub Pages. Installed copies pick up the new version from `addons.xml` there.
 
-1. Check that the tag matches `addon.xml`'s version and that `CHANGELOG.md` has a section for it.
-2. Run the same lint/test/build/validate jobs.
-3. Create a GitHub release with the zip attached and the changelog section as notes.
-4. Publish the docs: copy `docs/*.md` and `CHANGELOG.md` into the repository wiki (`<repo>.wiki.git`), so the wiki always mirrors the released docs.
-5. Optionally, submit to the official Kodi repository with `xbmc/action-kodi-addon-submitter`.
+Each deploy replaces the site, so it only serves the latest version.
 
-Keep `docs/` as the single source of truth and treat the wiki as a published copy, so documentation changes are reviewed in pull requests like code.
+Not automated yet: mirroring `docs/` to the repository wiki, and submitting to the official Kodi repository (`xbmc/action-kodi-addon-submitter`).
+
+The repository add-on (`repository.modernrtpplay/addon.xml`) rarely changes. Bump its version only when its URLs change, and keep the old site URL working until users have updated.
+
+### One-time setup
+
+- *Settings* → *Pages* → *Source*: **GitHub Actions**.
+- *Settings* → *Environments* → `github-pages` → *Deployment branches and tags*: add a tag rule `v*`. By default only `main` may deploy, so the `pages` job would be rejected.

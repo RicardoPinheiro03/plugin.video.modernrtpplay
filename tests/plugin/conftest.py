@@ -35,7 +35,6 @@ class Recorder:
         self.content = None
         self.resolved = None
         self.notifications = []
-        self.installed_addons = set()
         self.input_text = ""
 
 
@@ -104,9 +103,6 @@ def _install_fakes():
     xbmc = types.ModuleType("xbmc")
     xbmc.LOGDEBUG, xbmc.LOGINFO, xbmc.LOGWARNING, xbmc.LOGERROR = 0, 1, 2, 3
     xbmc.log = lambda message, level=0: None
-    xbmc.getCondVisibility = lambda condition: any(
-        "System.HasAddon({})".format(a) == condition for a in kodi_state.installed_addons
-    )
 
     xbmcgui = types.ModuleType("xbmcgui")
     xbmcgui.ListItem = ListItem
