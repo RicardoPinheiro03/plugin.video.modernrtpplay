@@ -1,6 +1,6 @@
 # plugin.video.modernrtpplay
 
-A Kodi add-on for [RTP Play](https://www.rtp.pt/play): live RTP TV channels and radio stations, plus on-demand programs you can browse by category or search.
+A Kodi add-on for [RTP Play](https://www.rtp.pt/play): on-demand RTP programs you can browse by category or search.
 
 It replaces [plugin.video.rtpplay](https://github.com/enen92/plugin.video.rtpplay), which stopped working ("could not retrieve TV shows") because RTP's mobile-app API now rejects third-party clients. This add-on reads the public RTP Play website instead.
 
@@ -8,7 +8,6 @@ It replaces [plugin.video.rtpplay](https://github.com/enen92/plugin.video.rtppla
 
 ## Features
 
-- **Live TV & Radio**: every channel on `rtp.pt/play/direto`, with what's on now
 - **Programs**: all programs per category (A–Z), with paginated episode lists
 - **Search** across the RTP Play catalogue
 - Plays HLS, DASH and direct audio/video; uses `inputstream.adaptive` when installed
@@ -18,12 +17,13 @@ It replaces [plugin.video.rtpplay](https://github.com/enen92/plugin.video.rtppla
 
 - Kodi 20 (Nexus) or newer
 - `script.module.requests` (installed automatically from the official Kodi repository)
-- Optional: `inputstream.adaptive`, recommended for live TV
+- Optional: `inputstream.adaptive`, recommended for HLS/DASH streams
 
 ## Documentation
 
 - [Installing on Kodi](docs/INSTALL.md)
 - [Developer guide: architecture, adding features, testing, releasing](docs/DEVELOPING.md)
+- [Future tasks](docs/FUTURE.md)
 - [Changelog](CHANGELOG.md)
 
 ## License

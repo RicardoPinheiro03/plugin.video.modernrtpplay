@@ -8,6 +8,10 @@ All notable changes to this add-on are documented here. The format is based on [
 
 - Opening a show lists its seasons first, then the episodes of the chosen season. Shows with a single season still open straight to their episodes. Series episodes are labelled with their number and title (e.g. "Ep. 1 - A Revolução").
 
+### Removed
+
+- *Live TV & Radio* from the main menu, until it's reworked (see `docs/FUTURE.md`). The client code for live channels is kept.
+
 ### Fixed
 
 - Episodes of fiction and other DRM-flagged shows now play: their pages name the HLS stream `fps`, which was ignored, so playback fell back to DASH.
