@@ -90,11 +90,46 @@ def test_episode_stream_fetches_the_episode_page():
     assert stream.headers["Referer"] == "https://www.rtp.pt/play/"
 
 
+FICTION = "/play/p10209/e763432/3-mulheres-pos-revolucao"
+SITE_URL = (
+    "https://streaming-vod.rtp.pt/hls/nas2.share,"
+    "/pt/h264/512x384/p10209/p10209_1_20240501143408e001t7005d_lo.mp4,"
+    "/pt/h264/512x384/p10209/p10209_1_20240501143408e001t7005d.mp4,.urlset/master.m3u8"
+)
+HD_URL = SITE_URL.replace(
+    ",.urlset/", ",/pt/h264/512x384/p10209/p10209_1_20240501143408e001t7005d_hi.mp4,.urlset/"
+)
+
+
 def test_fiction_episode_stream_is_hls():
     client, _ = make_client(FakeResponse(200, load_fixture("episode_fiction.html")))
-    stream = client.episode_stream("/play/p10209/e763432/3-mulheres-pos-revolucao")
+    stream = client.episode_stream(FICTION, best_quality=False)
     assert stream.protocol == HLS
     assert stream.url.startswith("https://streaming-vod.rtp.pt/hls/")
+
+
+def test_episode_stream_adds_1080p_when_the_cdn_has_it():
+    client, session = make_client(
+        FakeResponse(200, load_fixture("episode_fiction.html")), FakeResponse(200)
+    )
+    stream = client.episode_stream(FICTION)
+    assert session.requests[1]["url"] == HD_URL
+    assert stream.url == HD_URL
+    assert set(stream.headers) == {"User-Agent", "Referer", "Origin"}
+
+
+def test_episode_stream_keeps_the_site_stream_when_1080p_is_missing():
+    client, session = make_client(
+        FakeResponse(200, load_fixture("episode_fiction.html")), FakeResponse(502)
+    )
+    assert client.episode_stream(FICTION).url == SITE_URL
+    assert len(session.requests) == 2  # the check is not retried
+
+
+def test_episode_stream_without_best_quality_does_not_check():
+    client, session = make_client(FakeResponse(200, load_fixture("episode_fiction.html")))
+    assert client.episode_stream(FICTION, best_quality=False).url == SITE_URL
+    assert len(session.requests) == 1
 
 
 def test_episode_stream_rejects_foreign_urls():

@@ -150,6 +150,32 @@ def test_parse_episode_stream_reports_broken_obfuscation_as_parse_error(parts):
         parsers.parse_episode_stream(page)
 
 
+VOD = "https://streaming-vod.rtp.pt"
+FILES = "/pt/h264/512x384/p13643/p13643_1_20261019161102e001t3729d"
+
+
+@pytest.mark.parametrize("protocol, manifest", [("hls", "master.m3u8"), ("dash", "manifest.mpd")])
+def test_with_hi_rendition_adds_the_1080p_file_last(protocol, manifest):
+    files = "{}/{}/nas2.share,{f}_lo.mp4,{f}.mp4".format(VOD, protocol, f=FILES)
+    url = files + ",.urlset/" + manifest
+    assert parsers.with_hi_rendition(url) == files + ",{}_hi.mp4,.urlset/{}".format(FILES, manifest)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        VOD + "/hls/nas2.share,{f}_lo.mp4,{f}.mp4,{f}_hi.mp4,.urlset/master.m3u8".format(f=FILES),
+        VOD + "/hls/nas2.share,/h264/512x384/p10431/p10431_20220622002904et7682.mp4"
+        ",.urlset/master.m3u8",
+        "https://cdn-ondemand.rtp.pt/nas2.share/wavrss/at1/2610/DLT3903125_606455.mp3",
+        VOD + "/hls/nas2.share{}_lo.mp4/master.m3u8".format(FILES),
+    ],
+    ids=["already-has-hi", "single-file-urlset", "mp3", "not-a-urlset"],
+)
+def test_with_hi_rendition_leaves_other_urls_alone(url):
+    assert parsers.with_hi_rendition(url) is None
+
+
 def test_parse_collection():
     programs = parsers.parse_collection(load_fixture("collection.html"))
     assert [(p.id, p.title) for p in programs] == [

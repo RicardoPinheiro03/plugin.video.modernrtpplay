@@ -212,6 +212,40 @@ def test_unexpected_status_is_not_retried(clock):
     assert len(session.requests) == 1
 
 
+# --- exists (a quick check before playback) ---------------------------------
+
+
+def test_exists_is_true_on_200_without_reading_the_body(clock):
+    response = FakeResponse(200, "a large manifest")
+    session = FakeSession(response)
+    assert make_client(session, clock).exists("https://cdn/a.m3u8") is True
+    request = session.requests[0]
+    assert request["url"] == "https://cdn/a.m3u8"
+    assert request["stream"] and response.closed
+    assert {"User-Agent", "Referer", "Origin"} <= set(request["headers"])
+    assert request["timeout"] <= 5
+
+
+@pytest.mark.parametrize(
+    "result",
+    [FakeResponse(502), FakeResponse(404), requests.ConnectionError("down"), requests.Timeout("")],
+)
+def test_exists_is_false_otherwise_and_never_retries(clock, result):
+    session = FakeSession(result)
+    assert make_client(session, clock).exists("https://cdn/a.m3u8") is False
+    assert len(session.requests) == 1
+    assert clock.sleeps == []
+
+
+def test_exists_goes_through_the_limiter(clock):
+    session = FakeSession(OK, FakeResponse(200))
+    limiter = RateLimiter(rate=1, capacity=1, clock=clock, sleep=clock.sleep)
+    http = HttpClient(session=session, limiter=limiter, sleep=clock.sleep, now=clock)
+    http.get_text("/play/")
+    http.exists("https://cdn/a.m3u8")
+    assert clock.sleeps == pytest.approx([1.0])
+
+
 # --- parse_retry_after -------------------------------------------------------
 
 

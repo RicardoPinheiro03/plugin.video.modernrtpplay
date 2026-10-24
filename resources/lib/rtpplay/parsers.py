@@ -249,6 +249,24 @@ def parse_episode_stream(page: str) -> Stream:
     raise ParseError("Player configuration has no playable URL")
 
 
+def with_hi_rendition(url: str) -> Optional[str]:
+    """The VOD urlset ``url`` with its 1080p file added, or None if there is none to add.
+
+    Recent episodes list ``<name>_lo.mp4`` (576p) and ``<name>.mp4`` (720p) in
+    their urlset (``...,<file>,<file>,.urlset/master.m3u8``), but the CDN often
+    also has ``<name>_hi.mp4`` (1080p) next to them. Whether it does needs a request.
+    """
+    head, sep, tail = url.partition(",.urlset/")
+    entries = head.split(",")
+    low = next((entry for entry in entries if entry.endswith("_lo.mp4")), None)
+    if not sep or low is None:
+        return None
+    high = low[: -len("_lo.mp4")] + "_hi.mp4"
+    if high in entries:
+        return None
+    return "{},{}{}{}".format(head, high, sep, tail)
+
+
 def _deobfuscate(source: str) -> str:
     def decode(match: "re.Match[str]") -> str:
         try:

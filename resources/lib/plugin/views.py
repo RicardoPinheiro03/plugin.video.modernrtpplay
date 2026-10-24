@@ -196,7 +196,8 @@ class Addon:
         info = self._client.program_info(program_id)
         if not info.episode_path:
             raise NotFoundError("Program {} has no episode to play".format(program_id))
-        self._resolve(self._client.episode_stream(info.episode_path))
+        # Films keep the site's renditions for now: 1080p is only checked for episodes.
+        self._resolve(self._client.episode_stream(info.episode_path, best_quality=False))
 
     def _resolve(self, stream: Stream) -> None:
         # %20 rather than "+" for spaces: Kodi and InputStream Adaptive decode headers
