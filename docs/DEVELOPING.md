@@ -124,6 +124,7 @@ Category ids are a static table in `rtpplay/client.py` (`CATEGORIES`), because d
 
 - Python 3.8 compatible code (Kodi 20 still ships 3.8 on some platforms): use `from __future__ import annotations` and `typing.List` etc. Ruff's `target-version` only covers syntax, so CI also runs the test suite on a real Python 3.8 (`test-py38`).
 - Ruff for lint and formatting (`pyproject.toml`), 100-column lines.
+- Branching, releases and hotfixes: see [BRANCHING.md](BRANCHING.md).
 - Branches: `feat/…`, `fix/…`, `docs/…`, `ci/…`. One component or concern per pull request.
 - Commits and pull request titles follow [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<optional scope>): <imperative summary>`, then a body explaining *why*. Types: `feat` (user-visible feature), `fix` (bug fix), `docs`, `ci`, `test`, `refactor`, `chore`. Scopes name the component: `client`, `addon`, `repo`. Mark breaking changes with `!` (`feat(addon)!: …`). A pull request's title takes the type of its most significant change.
 
@@ -148,7 +149,7 @@ Releases are published by `.github/workflows/release.yml` when a `v*` tag is pus
 
 1. Bump `version` in `addon.xml` ([semantic versioning](https://semver.org)) and update `<news>`.
 2. Move the *Unreleased* entries in `CHANGELOG.md` under `## [X.Y.Z] - <date>`.
-3. Merge to `main`, then tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+3. Merge to `main`, cut `release/X.Y` from that commit and tag it `vX.Y.0`. Patch releases are tagged on `release/X.Y` instead. Both flows are in [BRANCHING.md](BRANCHING.md#releases).
 
 The workflow then:
 
