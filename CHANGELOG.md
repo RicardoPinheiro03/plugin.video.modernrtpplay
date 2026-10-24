@@ -6,6 +6,7 @@ All notable changes to this add-on are documented here. The format is based on [
 
 ### Changed
 
+- InputStream Adaptive is now a required dependency, and HLS/DASH always play through it. Kodi installs it with the add-on.
 - Opening a show lists its seasons first, then the episodes of the chosen season. Shows with a single season still open straight to their episodes. Series episodes are labelled with their number and title (e.g. "Ep. 1 - A Revolução").
 
 ### Removed

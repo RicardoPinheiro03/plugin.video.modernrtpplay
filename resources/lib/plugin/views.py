@@ -6,7 +6,6 @@ import logging
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.parse import quote, urlencode
 
-import xbmc
 import xbmcaddon
 import xbmcgui
 import xbmcplugin
@@ -153,10 +152,9 @@ class Addon:
         item.setContentLookup(False)
         if stream.protocol in MIME_TYPES:
             item.setMimeType(MIME_TYPES[stream.protocol])
-            if xbmc.getCondVisibility("System.HasAddon({})".format(ISA)):
-                item.setProperty("inputstream", ISA)
-                item.setProperty(ISA + ".manifest_headers", headers)
-                item.setProperty(ISA + ".stream_headers", headers)
+            item.setProperty("inputstream", ISA)
+            item.setProperty(ISA + ".manifest_headers", headers)
+            item.setProperty(ISA + ".stream_headers", headers)
         xbmcplugin.setResolvedUrl(self._handle, True, item)
 
     # --- Helpers ----------------------------------------------------------
