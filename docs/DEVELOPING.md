@@ -123,10 +123,14 @@ Category ids are a static table in `rtpplay/client.py` (`CATEGORIES`), because d
 
 ## CI
 
-`.github/workflows/ci.yml` runs on every pull request, on pushes to `main`, and as the first stage of a release:
+`.github/workflows/ci.yml` runs on every pull request, on pushes to `main`, and as the first stage of a release.
+
+A pull request runs the full pipeline only when it changes the add-on, its packaging or CI: `resources/`, `main.py`, `addon.xml`, `repository.modernrtpplay/`, `scripts/`, `tests/`, `pyproject.toml`, `requirements*.txt` or `.github/workflows/`. Other pull requests (docs, `CHANGELOG.md`, README) run only `changes` and `site`. Pushes to `main`, manual runs and releases always run everything.
 
 | Job | What it does |
 | --- | --- |
+| `changes` | Decides whether the full pipeline runs (see above) |
+| `site` | Always runs, in seconds. Builds the zip and the GitHub Pages site and checks the site: `addons.xml.md5` matches, every listed zip exists, the repository add-on's URLs share its `datadir`, and `index.html` links the repository zip |
 | `lint` | `ruff check`, `ruff format --check` and `mypy`; fails if compiled Python files (`__pycache__/`, `*.pyc`) are committed |
 | `test` | `pytest` on Python 3.10 and 3.13 with warnings as errors and a 90% branch-coverage gate |
 | `test-py38` | `pytest` on Python 3.8, the oldest Python that Kodi 20 ships |
@@ -144,7 +148,7 @@ The workflow then:
 
 1. Checks that the tag matches `addon.xml`'s version and that `CHANGELOG.md` has a section for it.
 2. Runs the whole CI workflow (lint, tests, zip build, `kodi-addon-checker`).
-3. Builds the Kodi repository from the CI zip (`scripts/build_repo.py`) and creates a GitHub release with the add-on zip, the repository zip and the changelog section as notes.
+3. Builds the Kodi repository from the CI zip (`scripts/build_repo.py`). Its `index.html` is the release index: install steps and every GitHub release, newest first, with links to the notes and zip. Then it creates a GitHub release with the add-on zip, the repository zip and the changelog section as notes.
 4. Deploys the repository to GitHub Pages. Installed copies pick up the new version from `addons.xml` there.
 
 Each deploy replaces the site, so it only serves the latest version.
