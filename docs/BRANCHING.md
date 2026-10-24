@@ -31,8 +31,8 @@ R1, R2: release PRs (version bump, changelog)   F: squashed fix   B: patch bump
 ## Merging
 
 - **Pull requests only.** Nothing is pushed straight to `main` or `release/*`.
-- **Squash merge** feature branches, so each PR becomes one commit on `main`. The PR title is that commit's subject, so it must follow Conventional Commits: `type(scope): summary`, scopes `client`, `addon`, `repo`, `!` for breaking changes (`feat(addon)!: …`).
-- **Green CI required:** `lint`, `test`, `test-py38` and `build`.
+- **Squash merge** feature branches, so each PR becomes one commit on `main`. The PR title is that commit's subject, so it must follow Conventional Commits as described in [DEVELOPING.md](DEVELOPING.md#conventions): `type(scope): imperative summary`, scopes `client`, `addon`, `repo`, `!` for breaking changes (`feat(addon)!: …`).
+- **Green CI required:** `changes`, `site`, `lint`, `test`, `test-py38` and `build`. Docs-only PRs skip the add-on jobs, and GitHub counts a skipped required check as passed.
 - **Changelog in the same PR:** user-visible changes add a line under *Unreleased* in `CHANGELOG.md`.
 
 ## Releases
@@ -82,16 +82,20 @@ Only the **latest** `release/X.Y`. Older release branches are frozen: users get 
 
 ## Branch protection (GitHub settings)
 
-- **`main` and `release/*`** (one ruleset each): require a pull request, require the status checks `lint`, `test`, `test-py38`, `build`, require branches to be up to date, block force pushes and deletion.
+- **`main` and `release/*`** (one ruleset each): require a pull request, require the status checks `changes`, `site`, `lint`, `test`, `test-py38`, `build`, require branches to be up to date, block force pushes and deletion.
 - **`main`:** allow squash merge only, and enable *Automatically delete head branches*.
 - **Tags `v*`** (tag ruleset): only maintainers may create them; block updates and deletion.
 
 ## Fit with the release pipeline
 
-The tag-triggered `release.yml` on `ci/release-pipeline` works with this strategy, since it runs on any `v*` tag regardless of branch. When it lands, these need changing:
+`release.yml` (on `main`) runs on any `v*` tag, whatever branch it points at, so it already works with release branches. It checks that the tag matches `addon.xml` and `CHANGELOG.md`, runs CI, creates the GitHub release and deploys the Kodi repository to Pages. The `github-pages` environment's `v*` tag rule covers tags on release branches.
 
-- **`ci.yml`** only runs on pushes to `main`. Add `release/**` to `on.push.branches` so release branches get the same checks after a merge (pull requests against them already run CI).
-- **Pages deploy:** each deploy replaces the site. The "latest release line only" rule above keeps this safe; a guard that skips the `pages` job unless the tag is the highest `v*` tag would make it enforced rather than a convention.
+Still open:
+
+- **`ci.yml`** runs on pushes to `main` only. Add `release/**` to `on.push.branches` so release branches get the same checks after a merge (pull requests against them already run CI).
+- **Pages deploy:** each deploy replaces the site. The "latest release line only" rule above keeps this safe by convention; a guard that skips the `pages` job unless the tag is the highest `v*` tag would enforce it.
 - **`check-version`** doesn't check where the tag points. Optionally fail unless the tagged commit is on `origin/release/X.Y`.
-- **DEVELOPING.md's *Releasing* steps** say "merge to `main`, then tag". That holds for `X.Y.0` (the `release/X.Y` branch starts at that commit) but patch tags go on `release/X.Y`; the text should point here.
-- The `github-pages` environment's `v*` tag rule already covers tags on release branches.
+
+## Adopting it now
+
+`0.2.0` is released on `main` (#12) but not tagged yet. Start the first release line from that commit: `git switch -c release/0.2 7bcbb25`, push it, then tag `v0.2.0` there as in *Minor or major release*, step 2.

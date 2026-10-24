@@ -143,7 +143,7 @@ Releases are published by `.github/workflows/release.yml` when a `v*` tag is pus
 
 1. Bump `version` in `addon.xml` ([semantic versioning](https://semver.org)) and update `<news>`.
 2. Move the *Unreleased* entries in `CHANGELOG.md` under `## [X.Y.Z] - <date>`.
-3. Merge to `main`, then tag and push: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+3. Merge to `main`, cut `release/X.Y` from that commit and tag it `vX.Y.0`. Patch releases are tagged on `release/X.Y` instead. Both flows are in [BRANCHING.md](BRANCHING.md#releases).
 
 The workflow then:
 
