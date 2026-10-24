@@ -4,6 +4,8 @@ All notable changes to this add-on are documented here. The format is based on [
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-24
+
 ### Added
 
 - Kodi repository (`repository.modernrtpplay`) on GitHub Pages: add one source URL in Kodi, install once, and the add-on updates automatically.
@@ -33,5 +35,6 @@ All notable changes to this add-on are documented here. The format is based on [
 - CI: lint, tests, zip build and `kodi-addon-checker` validation.
 - Documentation: installation guide and developer guide.
 
-[Unreleased]: https://github.com/RicardoPinheiro03/plugin.video.modernrtpplay/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/RicardoPinheiro03/plugin.video.modernrtpplay/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/RicardoPinheiro03/plugin.video.modernrtpplay/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/RicardoPinheiro03/plugin.video.modernrtpplay/releases/tag/v0.1.0

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="plugin.video.modernrtpplay" name="RTP Play" version="0.1.0" provider-name="RicardoPinheiro03">
+<addon id="plugin.video.modernrtpplay" name="RTP Play" version="0.2.0" provider-name="RicardoPinheiro03">
     <requires>
         <import addon="xbmc.python" version="3.0.1"/>
         <import addon="script.module.requests" version="2.22.0"/>
@@ -20,6 +20,6 @@
         <license>GPL-3.0-only</license>
         <website>https://www.rtp.pt/play</website>
         <source>https://github.com/RicardoPinheiro03/plugin.video.modernrtpplay</source>
-        <news>v0.1.0: first release, built on the RTP Play website instead of the retired mobile API.</news>
+        <news>v0.2.0: shows open by season, fiction episodes play, InputStream Adaptive is required, and the add-on now updates from its own Kodi repository. Live TV is hidden for now.</news>
     </extension>
 </addon>
