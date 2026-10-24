@@ -4,11 +4,25 @@ from __future__ import annotations
 
 import dataclasses
 import re
-from typing import List, Optional, TypeVar
+from typing import Any, Callable, List, Optional, TypeVar
 
 from . import parsers
+from .cache import Cache
 from .http import DEFAULT_HEADERS, HttpClient
-from .models import Category, Channel, Episode, Page, Program, Season, Stream
+from .models import (
+    MOVIES,
+    SHOWS,
+    Category,
+    Channel,
+    Collection,
+    Episode,
+    EpisodeInfo,
+    Page,
+    Program,
+    ProgramInfo,
+    Season,
+    Stream,
+)
 
 T = TypeVar("T")
 
@@ -35,21 +49,87 @@ CATEGORIES = (
     Category(17, "especiais", "Especiais"),
 )
 
+# The site's series and film collections, as linked from its home page shelves.
+COLLECTIONS = (
+    Collection("series-nacionais", "Séries Nacionais", SHOWS),
+    Collection("series-estrangeiras", "Séries Estrangeiras", SHOWS),
+    Collection("cinema-portugues", "Cinema Português", MOVIES),
+    Collection("filmes", "Cinema Internacional", MOVIES),
+)
+
 # Page sizes used by the site's list endpoints. A shorter page is the last one.
 PROGRAMS_PAGE_SIZE = 12
 EPISODES_PAGE_SIZE = 12
 SEARCH_PAGE_SIZE = 16
+# A collection page lists every program at once; we split it into pages like the rest.
+COLLECTION_PAGE_SIZE = 12
+
+# How long cached pages stay fresh, in seconds. Collections and seasons change
+# now and then; an episode's synopsis practically never does.
+COLLECTION_TTL = 6 * 3600
+PROGRAM_TTL = 24 * 3600
+EPISODE_TTL = 30 * 24 * 3600
+# Bump when a cached model changes shape, so old entries are ignored.
+CACHE_VERSION = 1
 
 # Headers the streaming CDN checks before serving media.
 STREAM_HEADERS = {key: DEFAULT_HEADERS[key] for key in ("User-Agent", "Referer", "Origin")}
 
 
 class RtpPlayClient:
-    def __init__(self, http: Optional[HttpClient] = None) -> None:
+    """Without a ``cache``, every call fetches from the site."""
+
+    def __init__(self, http: Optional[HttpClient] = None, cache: Optional[Cache] = None) -> None:
         self._http = http or HttpClient()
+        self._cache = cache
 
     def categories(self) -> List[Category]:
         return list(CATEGORIES)
+
+    def collections(self, kind: str) -> List[Collection]:
+        """The collections of one kind, SHOWS or MOVIES."""
+        return [c for c in COLLECTIONS if c.kind == kind]
+
+    def collection(self, slug: str, page: int = 1) -> Page[Program]:
+        """Programs in a collection, in the site's order. Cached for COLLECTION_TTL."""
+        if slug not in {c.slug for c in COLLECTIONS}:
+            raise ValueError("unknown collection {!r}".format(slug))
+        start = (_page(page) - 1) * COLLECTION_PAGE_SIZE
+        programs = self._cached(
+            "collection:" + slug,
+            COLLECTION_TTL,
+            lambda: parsers.parse_collection(self._http.get_text("/play/colecao/" + slug)),
+            lambda data: [Program(**p) for p in data],
+        )
+        return Page(
+            items=programs[start : start + COLLECTION_PAGE_SIZE],
+            page=page,
+            has_more=len(programs) > start + COLLECTION_PAGE_SIZE,
+        )
+
+    def program_info(self, program_id: int) -> ProgramInfo:
+        """Synopsis, artwork, seasons and latest episode of a program. Cached for PROGRAM_TTL."""
+        # The program page ignores the slug after the id, so none is needed.
+        return self._cached(
+            "program:{}".format(program_id),
+            PROGRAM_TTL,
+            lambda: parsers.parse_program_info(
+                self._http.get_text("/play/p{}/".format(program_id)), program_id
+            ),
+            lambda data: ProgramInfo(
+                **dict(data, seasons=[Season(**season) for season in data["seasons"]])
+            ),
+        )
+
+    def episode_info(self, episode_path: str) -> EpisodeInfo:
+        """Synopsis and duration of an episode. Cached for EPISODE_TTL."""
+        _check_episode_path(episode_path)
+        return self._cached(
+            "episode:" + episode_path,
+            EPISODE_TTL,
+            lambda: parsers.parse_episode_info(self._http.get_text(episode_path)),
+            lambda data: EpisodeInfo(**data),
+        )
 
     def programs(self, category_id: int, page: int = 1) -> Page[Program]:
         """Programs in a category, alphabetically."""
@@ -61,8 +141,7 @@ class RtpPlayClient:
 
     def seasons(self, program_id: int) -> List[Season]:
         """Seasons of a program, as the site lists them; empty or one item if it has only one."""
-        # The program page ignores the slug after the id, so none is needed.
-        return parsers.parse_seasons(self._http.get_text("/play/p{}/".format(program_id)))
+        return self.program_info(program_id).seasons
 
     def episodes(self, program_id: int, page: int = 1) -> Page[Episode]:
         """Episodes of a program, newest first."""
@@ -90,10 +169,31 @@ class RtpPlayClient:
 
     def episode_stream(self, episode_path: str) -> Stream:
         """``episode_path`` is :attr:`Episode.path`, e.g. ``/play/p1525/e892592/a-mosca``."""
-        if not episode_path.startswith("/play/"):
-            raise ValueError("episode_path must be a /play/ path")
+        _check_episode_path(episode_path)
         stream = parsers.parse_episode_stream(self._http.get_text(episode_path))
         return dataclasses.replace(stream, headers=dict(STREAM_HEADERS))
+
+    def _cached(self, key: str, ttl: float, fetch: Callable[[], T], load: Callable[[Any], T]) -> T:
+        if self._cache is None:
+            return fetch()
+        key = "v{}:{}".format(CACHE_VERSION, key)
+        data = self._cache.get(key)
+        if data is not None:
+            return load(data)
+        value = fetch()
+        self._cache.set(key, _to_json(value), ttl)
+        return value
+
+
+def _to_json(value: Any) -> Any:
+    if isinstance(value, list):
+        return [dataclasses.asdict(item) for item in value]
+    return dataclasses.asdict(value)
+
+
+def _check_episode_path(episode_path: str) -> None:
+    if not episode_path.startswith("/play/"):
+        raise ValueError("episode_path must be a /play/ path")
 
 
 def _page(page: int) -> int:

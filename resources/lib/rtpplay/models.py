@@ -10,6 +10,9 @@ T = TypeVar("T")
 TV = "tv"
 RADIO = "radio"
 
+SHOWS = "shows"
+MOVIES = "movies"
+
 HLS = "hls"
 DASH = "dash"
 PROGRESSIVE = "progressive"
@@ -20,6 +23,15 @@ class Category:
     id: int
     slug: str
     name: str
+
+
+@dataclass(frozen=True)
+class Collection:
+    """A curated list of programs, e.g. foreign series or Portuguese films."""
+
+    slug: str  # e.g. "filmes", the page /play/colecao/<slug>
+    name: str
+    kind: str  # SHOWS or MOVIES
 
 
 @dataclass(frozen=True)
@@ -50,6 +62,18 @@ class Season:
 
 
 @dataclass(frozen=True)
+class ProgramInfo:
+    """Details from a program page. Fields the page lacks are None or empty."""
+
+    program_id: int
+    plot: Optional[str] = None
+    image: Optional[str] = None  # landscape artwork
+    year: Optional[int] = None
+    seasons: List[Season] = field(default_factory=list)
+    episode_path: Optional[str] = None  # latest episode; a film's only one
+
+
+@dataclass(frozen=True)
 class Episode:
     program_id: int
     id: int
@@ -57,6 +81,15 @@ class Episode:
     path: str  # site path such as "/play/p1525/e892592/a-mosca", used to fetch the stream
     thumbnail: Optional[str] = None
     date: Optional[str] = None  # as shown on the site, e.g. "28 nov. 2025"
+
+
+@dataclass(frozen=True)
+class EpisodeInfo:
+    """Details from an episode page that the episode lists leave out."""
+
+    plot: Optional[str] = None
+    duration: Optional[int] = None  # seconds
+    image: Optional[str] = None
 
 
 @dataclass(frozen=True)

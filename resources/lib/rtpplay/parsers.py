@@ -11,11 +11,24 @@ import base64
 import html
 import json
 import re
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from urllib.parse import unquote
 
 from .errors import ParseError
-from .models import DASH, HLS, PROGRESSIVE, RADIO, TV, Channel, Episode, Program, Season, Stream
+from .models import (
+    DASH,
+    HLS,
+    PROGRESSIVE,
+    RADIO,
+    TV,
+    Channel,
+    Episode,
+    EpisodeInfo,
+    Program,
+    ProgramInfo,
+    Season,
+    Stream,
+)
 
 _ARTICLE = re.compile(r"<article\b.*?</article>", re.S)
 _EPISODE_LINK = re.compile(
@@ -27,6 +40,15 @@ _EPISODE_TITLE = re.compile(r'<(?:p|h4) class="episode-title">(.*?)</(?:p|h4)>',
 _EPISODE_LEAD = re.compile(r'<span class="episode-lead">(.*?)</span>', re.S)
 _EPISODE_DATE = re.compile(r'<(?:div|span) class="episode-date">(.*?)</(?:div|span)>', re.S)
 _EPISODE_NUMBER = re.compile(r'<div class="episode">(.*?)</div>', re.S)
+
+_PROGRAM_LINK = re.compile(r'<a\s+href="/play/p(?P<program>\d+)/[^"]*"\s+title="(?P<title>[^"]*)"')
+_LINK_PREFIX = re.compile(r"^Aceder a:?\s*")
+
+_JSON_LD = re.compile(r'<script type="application/ld\+json">(.*?)</script>', re.S)
+_OG_IMAGE = re.compile(r'<meta property="og:image" content="([^"]+)"')
+_PROGRAM_LEAD = re.compile(r'<h2 class="lead">(.*?)</h2>', re.S)
+_PROGRAM_YEAR = re.compile(r"<b>Ano:</b>\s*(\d{4})")
+_ISO_DURATION = re.compile(r"PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?")
 
 _SEASON_SELECT = re.compile(r'class="[^"]*\bseasons-container\b.*?<select\b.*?</select>', re.S)
 _SEASON_OPTION = re.compile(r'<option value="/play/p(\d+)/[^"]*"[^>]*>(.*?)</option>', re.S)
@@ -96,6 +118,63 @@ def parse_episodes(fragment: str) -> List[Episode]:
             )
         )
     return episodes
+
+
+def parse_collection(page: str) -> List[Program]:
+    """Parse a collection page (``/play/colecao/<slug>``), which lists all its programs."""
+    programs = []
+    for article in _ARTICLE.findall(page):
+        link = _PROGRAM_LINK.search(article)
+        if not link:
+            continue
+        title = _LINK_PREFIX.sub("", _clean_text(link.group("title")))
+        programs.append(
+            Program(id=int(link.group("program")), title=title, thumbnail=_first(_IMG, article))
+        )
+    if not programs:
+        raise ParseError("No programs found on the collection page")
+    return programs
+
+
+def parse_program_info(page: str, program_id: int) -> ProgramInfo:
+    """Parse a program page (``/play/p<id>/``): synopsis, artwork, year, seasons, episode.
+
+    Every field is optional: trimmed or unusual pages still give their seasons.
+    """
+    lead = _PROGRAM_LEAD.search(page)
+    plot = _plot_text(lead.group(1)) if lead else None
+    year = _PROGRAM_YEAR.search(page)
+    episode_path = next(
+        (
+            m.group("path")
+            for m in _EPISODE_LINK.finditer(page)
+            if int(m.group("program")) == program_id
+        ),
+        None,
+    )
+    return ProgramInfo(
+        program_id=program_id,
+        plot=plot or _plot_text(_json_ld(page).get("description", "")),
+        image=_first(_OG_IMAGE, page),
+        year=int(year.group(1)) if year else None,
+        seasons=parse_seasons(page),
+        episode_path=episode_path,
+    )
+
+
+def parse_episode_info(page: str) -> EpisodeInfo:
+    """Parse the details of an episode page; missing ones are None."""
+    data = _json_ld(page)
+    duration = _ISO_DURATION.fullmatch(data.get("duration", ""))
+    seconds = None
+    if duration and any(duration.groups()):
+        hours, minutes, secs = (int(part or 0) for part in duration.groups())
+        seconds = hours * 3600 + minutes * 60 + secs
+    return EpisodeInfo(
+        plot=_plot_text(data.get("description", "")),
+        duration=seconds,
+        image=data.get("thumbnailURL") or None,
+    )
 
 
 def parse_seasons(page: str) -> List[Season]:
@@ -200,6 +279,25 @@ def _protocol_of(url: str) -> str:
     if path.endswith(".mpd"):
         return DASH
     return PROGRESSIVE
+
+
+def _json_ld(page: str) -> Dict[str, Any]:
+    """The first JSON-LD object of a page, or {}. Its strings can hold raw newlines."""
+    for block in _JSON_LD.findall(page):
+        try:
+            data = json.loads(block, strict=False)
+        except ValueError:
+            continue
+        if isinstance(data, dict):
+            return data
+    return {}
+
+
+def _plot_text(text: str) -> Optional[str]:
+    """Like _clean_text, but keeps line breaks between paragraphs."""
+    text = re.sub(r"<br\s*/?>", "\n", text)
+    lines = (_clean_text(line) for line in text.split("\n"))
+    return "\n".join(line for line in lines if line) or None
 
 
 def _first(pattern: "re.Pattern[str]", text: str) -> Optional[str]:
