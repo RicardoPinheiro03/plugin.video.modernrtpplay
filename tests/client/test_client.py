@@ -1,15 +1,22 @@
 import pytest
 
 from conftest import FakeResponse, FakeSession, load_fixture
-from rtpplay import HttpClient, RateLimiter, RtpPlayClient
-from rtpplay.client import CATEGORIES
-from rtpplay.models import HLS
+from rtpplay import Cache, HttpClient, RateLimiter, RtpPlayClient
+from rtpplay.client import CACHE_VERSION, CATEGORIES, COLLECTION_TTL, COLLECTIONS
+from rtpplay.models import HLS, MOVIES, SHOWS
 
 
-def make_client(*responses):
+def make_client(*responses, cache=None):
     session = FakeSession(*responses)
     limiter = RateLimiter(rate=100, capacity=100, sleep=lambda s: None)
-    return RtpPlayClient(HttpClient(session=session, limiter=limiter)), session
+    return RtpPlayClient(HttpClient(session=session, limiter=limiter), cache), session
+
+
+@pytest.fixture
+def cache(clock):
+    cache = Cache(clock=clock)
+    yield cache
+    cache.close()
 
 
 def test_categories_need_no_request():
@@ -103,3 +110,85 @@ def test_live_stream_rejects_invalid_slugs_before_any_request(slug):
     with pytest.raises(ValueError, match="channel_slug"):
         client.live_stream(slug)
     assert session.requests == []
+
+
+def test_collections_need_no_request():
+    client, session = make_client()
+    assert {c.kind for c in client.collections(SHOWS)} == {SHOWS}
+    assert {c.kind for c in client.collections(MOVIES)} == {MOVIES}
+    assert len(client.collections(SHOWS)) + len(client.collections(MOVIES)) == len(COLLECTIONS)
+    assert session.requests == []
+
+
+def test_collection_is_split_into_pages():
+    fifteen_programs = load_fixture("collection.html").replace("</div>", "") * 5  # 15 programs
+    client, session = make_client(
+        FakeResponse(200, fifteen_programs), FakeResponse(200, fifteen_programs)
+    )
+    first, second = client.collection("filmes"), client.collection("filmes", page=2)
+    assert session.requests[0]["url"] == "https://www.rtp.pt/play/colecao/filmes"
+    assert (len(first.items), first.has_more) == (12, True)
+    assert (len(second.items), second.has_more) == (3, False)
+
+
+def test_collection_is_cached(cache, clock):
+    response = FakeResponse(200, load_fixture("collection.html"))
+    client, session = make_client(response, response, cache=cache)
+    assert client.collection("filmes") == client.collection("filmes")
+    assert len(session.requests) == 1
+    clock.now += COLLECTION_TTL
+    client.collection("filmes")
+    assert len(session.requests) == 2
+
+
+@pytest.mark.parametrize(
+    "call", [lambda c: c.collection("../p1"), lambda c: c.collection("filmes", 0)]
+)
+def test_invalid_collection_arguments_fail_before_any_request(call):
+    client, session = make_client()
+    with pytest.raises(ValueError):
+        call(client)
+    assert session.requests == []
+
+
+def test_program_info_is_cached_and_shared_with_seasons(cache):
+    client, session = make_client(
+        FakeResponse(200, load_fixture("program_movie.html")), cache=cache
+    )
+    info = client.program_info(17296)
+    assert session.requests[0]["url"] == "https://www.rtp.pt/play/p17296/"
+    assert client.program_info(17296) == info
+    assert client.seasons(17296) == []
+    assert len(session.requests) == 1
+
+
+def test_cached_seasons_keep_their_type(cache):
+    response = FakeResponse(200, load_fixture("program_seasons.html"))
+    client, session = make_client(response, cache=cache)
+    assert client.seasons(10209) == client.seasons(10209)
+    assert len(session.requests) == 1
+
+
+def test_episode_info_is_cached(cache):
+    client, session = make_client(FakeResponse(200, load_fixture("episode_info.html")), cache=cache)
+    path = "/play/p17133/e953860/o-espiao-que-veio-do-futebol"
+    assert client.episode_info(path) == client.episode_info(path)
+    assert session.requests[0]["url"] == "https://www.rtp.pt" + path
+    assert len(session.requests) == 1
+
+
+def test_episode_info_rejects_foreign_urls():
+    client, session = make_client()
+    with pytest.raises(ValueError):
+        client.episode_info("https://evil.example/play/x")
+    assert session.requests == []
+
+
+def test_cache_entries_that_no_longer_fit_the_model_are_refetched(cache):
+    client, session = make_client(FakeResponse(200, load_fixture("episode_info.html")), cache=cache)
+    path = "/play/p17133/e953860/o-espiao-que-veio-do-futebol"
+    cache.set("v{}:episode:{}".format(CACHE_VERSION, path), {"renamed": 1}, ttl=60)
+    assert client.episode_info(path).duration == 2706
+    assert len(session.requests) == 1
+    assert client.episode_info(path).duration == 2706  # and the fresh value replaced it
+    assert len(session.requests) == 1

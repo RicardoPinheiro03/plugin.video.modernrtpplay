@@ -22,6 +22,8 @@ STRINGS = {
     30006: "Load failed",
     30007: "Search RTP Play",
     30008: "Season %s",
+    30009: "TV Shows",
+    30010: "Movies",
 }
 
 
@@ -36,6 +38,7 @@ class Recorder:
         self.resolved = None
         self.notifications = []
         self.input_text = ""
+        self.profile = ""
 
 
 kodi_state = Recorder()
@@ -45,12 +48,24 @@ class InfoTag:
     def __init__(self):
         self.title = None
         self.plot = None
+        self.media_type = None
+        self.year = None
+        self.duration = None
 
     def setTitle(self, title):
         self.title = title
 
     def setPlot(self, plot):
         self.plot = plot
+
+    def setMediaType(self, media_type):
+        self.media_type = media_type
+
+    def setYear(self, year):
+        self.year = year
+
+    def setDuration(self, duration):
+        self.duration = duration
 
 
 class ListItem:
@@ -96,7 +111,9 @@ class Addon:
         return STRINGS[string_id]
 
     def getAddonInfo(self, key):
-        return {"name": "RTP Play", "id": "plugin.video.modernrtpplay"}[key]
+        info = {"name": "RTP Play", "id": "plugin.video.modernrtpplay"}
+        info["profile"] = kodi_state.profile
+        return info[key]
 
 
 def _install_fakes():
@@ -131,8 +148,17 @@ def _install_fakes():
     xbmcaddon = types.ModuleType("xbmcaddon")
     xbmcaddon.Addon = Addon
 
+    xbmcvfs = types.ModuleType("xbmcvfs")
+    xbmcvfs.translatePath = lambda path: path
+
     sys.modules.update(
-        {"xbmc": xbmc, "xbmcgui": xbmcgui, "xbmcplugin": xbmcplugin, "xbmcaddon": xbmcaddon}
+        {
+            "xbmc": xbmc,
+            "xbmcgui": xbmcgui,
+            "xbmcplugin": xbmcplugin,
+            "xbmcaddon": xbmcaddon,
+            "xbmcvfs": xbmcvfs,
+        }
     )
 
 

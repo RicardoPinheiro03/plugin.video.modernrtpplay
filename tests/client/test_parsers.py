@@ -3,7 +3,7 @@ import pytest
 from conftest import load_fixture
 from rtpplay import parsers
 from rtpplay.errors import ParseError
-from rtpplay.models import DASH, HLS, PROGRESSIVE, RADIO, TV, Season
+from rtpplay.models import DASH, HLS, PROGRESSIVE, RADIO, TV, EpisodeInfo, Season
 
 
 def test_parse_programs():
@@ -148,3 +148,66 @@ def test_parse_episode_stream_reports_broken_obfuscation_as_parse_error(parts):
     page = 'var f = {hls : atob(decodeURIComponent(%s.join("")))};' % parts
     with pytest.raises(ParseError):
         parsers.parse_episode_stream(page)
+
+
+def test_parse_collection():
+    programs = parsers.parse_collection(load_fixture("collection.html"))
+    assert [(p.id, p.title) for p in programs] == [
+        (17336, "Lúcia e o Sexo"),
+        (17297, "Sobretudo de Noite"),
+        (17296, "Beleza Colateral"),
+    ]
+    assert programs[0].thumbnail.startswith("https://cdn-images.rtp.pt/EPG/imagens/")
+
+
+def test_parse_collection_fails_loudly_when_markup_changes():
+    with pytest.raises(ParseError):
+        parsers.parse_collection("<html></html>")
+
+
+def test_parse_program_info_of_a_film():
+    info = parsers.parse_program_info(load_fixture("program_movie.html"), 17296)
+    assert info.plot.startswith("Howard Inlet é um publicitário brilhante.")
+    assert "recuperar.\nHoward começa" in info.plot  # <br /> becomes a line break
+    assert info.year == 2016
+    assert info.image.startswith("https://cdn-images.rtp.pt/EPG/imagens/a20/49533_80466_22406.jpg")
+    assert info.episode_path == "/play/p17296/e961379/collateral-beauty"
+    assert info.seasons == []
+
+
+def test_parse_program_info_falls_back_to_the_json_ld_synopsis():
+    page = load_fixture("program_movie.html").replace('<h2 class="lead">', "<h2>")
+    info = parsers.parse_program_info(page, 17296)
+    assert info.plot.startswith("Um filme de David Frankel, com Will Smith")
+    assert "Peña" in info.plot  # HTML entities are decoded
+
+
+def test_parse_program_info_ignores_episodes_of_other_programs():
+    info = parsers.parse_program_info(load_fixture("program_movie.html"), 1)
+    assert info.episode_path is None
+
+
+def test_parse_program_info_of_a_page_without_details():
+    info = parsers.parse_program_info(load_fixture("program_seasons.html"), 10209)
+    assert (info.plot, info.year) == (None, None)
+    assert [s.program_id for s in info.seasons] == [10209, 5057]
+
+
+def test_parse_episode_info():
+    info = parsers.parse_episode_info(load_fixture("episode_info.html"))
+    assert info.plot.startswith("1941. Cândido de Oliveira")
+    assert info.duration == 45 * 60 + 6
+    assert info.image == "https://cdn-images.rtp.pt/EPG/imagens/a11/49435_80264_960.png?v=3&w=1170"
+
+
+@pytest.mark.parametrize(
+    "page",
+    [
+        "<html></html>",
+        '<script type="application/ld+json">not json</script>',
+        '<script type="application/ld+json">["a list"]</script>',
+        '<script type="application/ld+json">{"duration": "soon"}</script>',
+    ],
+)
+def test_parse_episode_info_without_details(page):
+    assert parsers.parse_episode_info(page) == EpisodeInfo()

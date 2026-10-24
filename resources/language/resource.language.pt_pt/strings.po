@@ -45,3 +45,11 @@ msgstr "Pesquisar na RTP Play"
 msgctxt "#30008"
 msgid "Season %s"
 msgstr "Temporada %s"
+
+msgctxt "#30009"
+msgid "TV Shows"
+msgstr "Séries"
+
+msgctxt "#30010"
+msgid "Movies"
+msgstr "Filmes"
